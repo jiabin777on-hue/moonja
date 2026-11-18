@@ -65,7 +65,7 @@ pub fn[R : FileReader] DyndepParser::new(
 ) -> DyndepParser {
   {
     state,
-    read: Some(fn(path) { reader.read_file(path) }),
+    read: Some(fn(path : String) raise NinjaError { reader.read_file(path) }),
     file,
     lexer: Lexer::new(""),
     env: BindingEnv::new(),
