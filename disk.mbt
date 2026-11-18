@@ -253,7 +253,9 @@ pub impl Disk for MemoryDisk with fn remove_file(self, path) {
   }
   if self.files.contains(path) {
     self.files.remove(path)
-    self.files_removed.push(path)
+    if !self.files_removed.contains(path) {
+      self.files_removed.push(path)
+    }
     0
   } else {
     1
