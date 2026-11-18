@@ -34,6 +34,8 @@ pub struct Node {
   validation_out_edges : Array[Edge]
   mut generated_by_dep_loader : Bool
   mut dyndep_pending : Bool
+  /// Index in the deps log, -1 if the node is not in it.
+  mut id : Int32
 }
 
 ///|
@@ -46,6 +48,7 @@ pub fn Node::new(path : String, slash_bits : UInt64) -> Node {
     validation_out_edges: [],
     generated_by_dep_loader: true,
     dyndep_pending: false,
+    id: -1,
   }
 }
 
@@ -67,6 +70,11 @@ pub fn Node::in_edge(self : Node) -> Edge? {
 ///|
 pub fn Node::out_edges(self : Node) -> Array[Edge] {
   self.out_edges
+}
+
+///|
+pub fn Node::id(self : Node) -> Int32 {
+  self.id
 }
 
 ///|

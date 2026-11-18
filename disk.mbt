@@ -1,7 +1,8 @@
 ///|
 /// The file system as ninja uses it: ninja's `DiskInterface`, plus the
-/// append and rename operations its logs perform with stdio. Modification
-/// times are integers whose unit the host chooses; 0 means "missing".
+/// append, rename and truncate operations its logs perform with stdio.
+/// Modification times are integers whose unit the host chooses; 0 means
+/// "missing". Text is UTF-8.
 pub(open) trait Disk {
   /// The mtime of `path`, 0 if it does not exist.
   fn stat(Self, String) -> Int64 raise NinjaError
@@ -11,18 +12,32 @@ pub(open) trait Disk {
   fn write_file(Self, String, String) -> Bool
   /// The contents of `path`, None if it does not exist.
   fn read_file(Self, String) -> String? raise NinjaError
+  /// The raw contents of `path`, None if it does not exist.
+  fn read_bytes(Self, String) -> Bytes? raise NinjaError
   /// 0 if removed, 1 if it did not exist, -1 on error (ninja's convention).
   fn remove_file(Self, String) -> Int32
   /// Appends to `path`, creating it if needed.
-  fn append_file(Self, String, String) -> Unit raise NinjaError
+  fn append_bytes(Self, String, Bytes) -> Unit raise NinjaError
   /// Replaces `to` with `from`.
   fn rename_file(Self, String, String) -> Unit raise NinjaError
+  /// Cuts `path` to its first `size` bytes.
+  fn truncate_file(Self, String, Int32) -> Unit raise NinjaError
+}
+
+///|
+/// Appends UTF-8 text.
+pub fn[D : Disk] append_text(
+  disk : D,
+  path : String,
+  text : String,
+) -> Unit raise NinjaError {
+  disk.append_bytes(path, @utf8.encode(text))
 }
 
 ///|
 struct MemoryFile {
   mut mtime : Int64
-  mut contents : String
+  mut contents : Bytes
   /// When set, `stat` fails with this message.
   mut stat_error : String
 }
@@ -66,10 +81,10 @@ pub fn MemoryDisk::now(self : MemoryDisk) -> Int64 {
 
 ///|
 /// Creates or replaces `path` with the current time as its mtime.
-pub fn MemoryDisk::create(
+pub fn MemoryDisk::create_bytes(
   self : MemoryDisk,
   path : String,
-  contents : String,
+  contents : Bytes,
 ) -> Unit {
   match self.files.get(path) {
     Some(file) => {
@@ -84,6 +99,16 @@ pub fn MemoryDisk::create(
 }
 
 ///|
+/// Creates or replaces `path` with UTF-8 text.
+pub fn MemoryDisk::create(
+  self : MemoryDisk,
+  path : String,
+  contents : String,
+) -> Unit {
+  self.create_bytes(path, @utf8.encode(contents))
+}
+
+///|
 /// Makes `stat` of `path` fail with `message`.
 pub fn MemoryDisk::set_stat_error(
   self : MemoryDisk,
@@ -95,7 +120,8 @@ pub fn MemoryDisk::set_stat_error(
       file.mtime = -1
       file.stat_error = message
     }
-    None => self.files[path] = { mtime: -1, contents: "", stat_error: message, }
+    None =>
+      self.files[path] = { mtime: -1, contents: b"", stat_error: message, }
   }
 }
 
@@ -107,12 +133,17 @@ pub fn MemoryDisk::set_mtime(
 ) -> Unit {
   match self.files.get(path) {
     Some(file) => file.mtime = mtime
-    None => self.files[path] = { mtime, contents: "", stat_error: "", }
+    None => self.files[path] = { mtime, contents: b"", stat_error: "", }
   }
 }
 
 ///|
 pub fn MemoryDisk::contents(self : MemoryDisk, path : String) -> String? {
+  self.files.get(path).map(fn(file) { @utf8.decode_lossy(file.contents) })
+}
+
+///|
+pub fn MemoryDisk::bytes(self : MemoryDisk, path : String) -> Bytes? {
   self.files.get(path).map(fn(file) { file.contents })
 }
 
@@ -169,6 +200,12 @@ pub impl Disk for MemoryDisk with fn write_file(self, path, contents) {
 ///|
 pub impl Disk for MemoryDisk with fn read_file(self, path) {
   self.files_read.push(path)
+  self.files.get(path).map(fn(file) { @utf8.decode_lossy(file.contents) })
+}
+
+///|
+pub impl Disk for MemoryDisk with fn read_bytes(self, path) {
+  self.files_read.push(path)
   self.files.get(path).map(fn(file) { file.contents })
 }
 
@@ -187,13 +224,13 @@ pub impl Disk for MemoryDisk with fn remove_file(self, path) {
 }
 
 ///|
-pub impl Disk for MemoryDisk with fn append_file(self, path, contents) {
+pub impl Disk for MemoryDisk with fn append_bytes(self, path, contents) {
   match self.files.get(path) {
     Some(file) => {
       file.contents = file.contents + contents
       file.mtime = self.now
     }
-    None => self.create(path, contents)
+    None => self.create_bytes(path, contents)
   }
 }
 
@@ -207,10 +244,20 @@ pub impl Disk for MemoryDisk with fn rename_file(self, from, to) {
 }
 
 ///|
+pub impl Disk for MemoryDisk with fn truncate_file(self, path, size) {
+  guard self.files.get(path) is Some(file) else {
+    raise Error("No such file or directory")
+  }
+  if size < file.contents.length() {
+    file.contents = file.contents[0:size].to_owned()
+  }
+}
+
+///|
 pub impl FileReader for MemoryDisk with fn read_file(self, path) {
   self.files_read.push(path)
   match self.files.get(path) {
-    Some(file) => file.contents
+    Some(file) => @utf8.decode_lossy(file.contents)
     None => raise Error("No such file or directory")
   }
 }

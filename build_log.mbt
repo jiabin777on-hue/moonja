@@ -84,7 +84,8 @@ fn[D : Disk] BuildLog::open_if_needed(
   }
   match disk.read_file(self.path) {
     None | Some("") =>
-      disk.append_file(
+      append_text(
+        disk,
         self.path,
         "\{build_log_signature}\{build_log_version}\n",
       )
@@ -126,7 +127,7 @@ pub fn[D : Disk] BuildLog::record_command(
     entry.mtime = mtime
     self.open_if_needed(disk)
     if self.opened {
-      disk.append_file(self.path, write_entry(entry))
+      append_text(disk, self.path, write_entry(entry))
     }
   }
 }
