@@ -3,11 +3,90 @@
 pub struct Pool {
   name : String
   depth : Int32
+  /// Weight of the scheduled edges that have not finished.
+  mut current_use : Int32
+  /// Edges waiting for room, highest priority first.
+  delayed : Array[Edge]
 }
 
 ///|
 pub fn Pool::new(name : String, depth : Int32) -> Pool {
-  { name, depth, }
+  { name, depth, current_use: 0, delayed: [], }
+}
+
+///|
+pub fn Pool::current_use(self : Pool) -> Int32 {
+  self.current_use
+}
+
+///|
+/// Pools with a depth limit hold edges back until there is room.
+pub fn Pool::should_delay_edge(self : Pool) -> Bool {
+  self.depth != 0
+}
+
+///|
+pub fn Pool::edge_scheduled(self : Pool, edge : Edge) -> Unit {
+  if self.depth != 0 {
+    self.current_use += edge.weight()
+  }
+}
+
+///|
+pub fn Pool::edge_finished(self : Pool, edge : Edge) -> Unit {
+  if self.depth != 0 {
+    self.current_use -= edge.weight()
+  }
+}
+
+///|
+/// Whether `a` comes before `b` in the delayed set: lighter edges first,
+/// then higher priority (ninja's `WeightedEdgeCmp`).
+fn delayed_before(a : Edge, b : Edge) -> Bool {
+  if a.weight() != b.weight() {
+    a.weight() < b.weight()
+  } else {
+    edge_before(a, b)
+  }
+}
+
+///|
+pub fn Pool::delay_edge(self : Pool, edge : Edge) -> Unit {
+  if self.delayed.iter().any(fn(e) { physical_equal(e, edge) }) {
+    return
+  }
+  let mut at = self.delayed.length()
+  for i, e in self.delayed {
+    if delayed_before(edge, e) {
+      at = i
+      break
+    }
+  }
+  self.delayed.insert(at, edge)
+}
+
+///|
+/// Moves delayed edges to `ready` while the pool has room.
+pub fn Pool::retrieve_ready_edges(
+  self : Pool,
+  ready : EdgePriorityQueue,
+) -> Unit {
+  let mut taken = 0
+  for edge in self.delayed {
+    if self.current_use + edge.weight() > self.depth {
+      break
+    }
+    ready.push(edge)
+    self.edge_scheduled(edge)
+    taken += 1
+  }
+  if taken > 0 {
+    let rest = self.delayed[taken:].to_owned()
+    self.delayed.clear()
+    for e in rest {
+      self.delayed.push(e)
+    }
+  }
 }
 
 ///|
@@ -36,6 +115,8 @@ pub struct Node {
   mut dyndep_pending : Bool
   /// Index in the deps log, -1 if the node is not in it.
   mut id : Int32
+  /// Creation order in the state; orders node sets like ninja's pointers.
+  mut index : Int32
   /// -1 until stat'ed; 0 if missing. For phony outputs, the newest input.
   mut mtime : Int64
   mut existence : Existence
@@ -61,6 +142,7 @@ pub fn Node::new(path : String, slash_bits : UInt64) -> Node {
     generated_by_dep_loader: true,
     dyndep_pending: false,
     id: -1,
+    index: -1,
     mtime: -1,
     existence: Unknown,
     dirty: false,
@@ -90,6 +172,11 @@ pub fn Node::out_edges(self : Node) -> Array[Edge] {
 ///|
 pub fn Node::id(self : Node) -> Int32 {
   self.id
+}
+
+///|
+pub fn Node::generated_by_dep_loader(self : Node) -> Bool {
+  self.generated_by_dep_loader
 }
 
 ///|
@@ -198,6 +285,8 @@ pub struct Edge {
   mut deps_loaded : Bool
   mut deps_missing : Bool
   mut critical_path_weight : Int64
+  /// When the command started, for restat; 0 if unknown.
+  mut command_start_time : Int64
 }
 
 ///|

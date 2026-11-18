@@ -80,6 +80,7 @@ pub fn State::add_edge(self : State, rule : Rule) -> Edge {
     deps_loaded: false,
     deps_missing: false,
     critical_path_weight: -1,
+    command_start_time: 0,
   }
   self.edges.push(edge)
   edge
@@ -96,6 +97,7 @@ pub fn State::get_node(
     Some(node) => node
     None => {
       let node = Node::new(path, slash_bits)
+      node.index = self.paths.length()
       self.paths[path] = node
       node
     }

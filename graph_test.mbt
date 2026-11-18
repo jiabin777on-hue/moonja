@@ -1,6 +1,5 @@
 // Ported from ninja v1.13.2 src/graph_test.cc (Apache-2.0, see NOTICE).
-// Test names follow the original. NestedPhonyPrintsDone needs the build
-// Plan and lives with the build tests.
+// Test names follow the original.
 
 ///|
 /// GraphTest: a state with a `cat` rule, an in-memory disk and a scan.
@@ -771,4 +770,15 @@ test "GraphTest.EdgeQueuePriority" {
     assert_true(physical_equal(queue.pop().unwrap(), edges[i]))
   }
   assert_true(queue.is_empty())
+}
+
+///|
+test "GraphTest.NestedPhonyPrintsDone" {
+  // A nested phony target has no work to do.
+  let g = graph("build n1: phony \nbuild n2: phony n1\n")
+  g.recompute("n2")
+  let plan = @moonja.Plan::new()
+  plan.add_target(g.node("n2"))
+  assert_eq(plan.command_edge_count(), 0)
+  assert_false(plan.more_to_do())
 }
