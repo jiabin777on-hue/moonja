@@ -36,6 +36,18 @@ pub struct Node {
   mut dyndep_pending : Bool
   /// Index in the deps log, -1 if the node is not in it.
   mut id : Int32
+  /// -1 until stat'ed; 0 if missing. For phony outputs, the newest input.
+  mut mtime : Int64
+  mut existence : Existence
+  mut dirty : Bool
+}
+
+///|
+#derive(Eq, Debug)
+pub(all) enum Existence {
+  Unknown
+  Missing
+  Exists
 }
 
 ///|
@@ -49,6 +61,9 @@ pub fn Node::new(path : String, slash_bits : UInt64) -> Node {
     generated_by_dep_loader: true,
     dyndep_pending: false,
     id: -1,
+    mtime: -1,
+    existence: Unknown,
+    dirty: false,
   }
 }
 
@@ -78,6 +93,79 @@ pub fn Node::id(self : Node) -> Int32 {
 }
 
 ///|
+pub fn Node::mtime(self : Node) -> Int64 {
+  self.mtime
+}
+
+///|
+pub fn Node::exists(self : Node) -> Bool {
+  self.existence is Exists
+}
+
+///|
+pub fn Node::status_known(self : Node) -> Bool {
+  !(self.existence is Unknown)
+}
+
+///|
+pub fn Node::dirty(self : Node) -> Bool {
+  self.dirty
+}
+
+///|
+pub fn Node::set_dirty(self : Node, dirty : Bool) -> Unit {
+  self.dirty = dirty
+}
+
+///|
+pub fn Node::validation_out_edges(self : Node) -> Array[Edge] {
+  self.validation_out_edges
+}
+
+///|
+/// Reads the mtime from `disk`.
+pub fn Node::stat(self : Node, disk : &Disk) -> Unit raise NinjaError {
+  // On failure the mtime stays -1 and the node's status unknown.
+  self.mtime = -1
+  self.mtime = disk.stat(self.path)
+  self.existence = if self.mtime != 0 { Exists } else { Missing }
+}
+
+///|
+pub fn Node::stat_if_necessary(
+  self : Node,
+  disk : &Disk,
+) -> Unit raise NinjaError {
+  if !self.status_known() {
+    self.stat(disk)
+  }
+}
+
+///|
+/// A phony output that does not exist takes the newest mtime of its
+/// inputs, so that its dependents compare against them.
+pub fn Node::update_phony_mtime(self : Node, mtime : Int64) -> Unit {
+  if !self.exists() && mtime > self.mtime {
+    self.mtime = mtime
+  }
+}
+
+///|
+pub fn Node::reset_state(self : Node) -> Unit {
+  self.mtime = -1
+  self.existence = Unknown
+  self.dirty = false
+}
+
+///|
+pub fn Node::mark_missing(self : Node) -> Unit {
+  if self.mtime == -1 {
+    self.mtime = 0
+  }
+  self.existence = Missing
+}
+
+///|
 pub fn Node::dyndep_pending(self : Node) -> Bool {
   self.dyndep_pending
 }
@@ -104,6 +192,20 @@ pub struct Edge {
   mut implicit_outs : Int32
   mut dyndep : Node?
   platform : Platform
+  /// Cycle detection mark of the dirty scan.
+  mut mark : VisitMark
+  mut outputs_ready : Bool
+  mut deps_loaded : Bool
+  mut deps_missing : Bool
+  mut critical_path_weight : Int64
+}
+
+///|
+#derive(Eq, Debug)
+pub(all) enum VisitMark {
+  VisitNone
+  VisitInStack
+  VisitDone
 }
 
 ///|
@@ -134,6 +236,62 @@ pub fn Edge::validations(self : Edge) -> Array[Node] {
 ///|
 pub fn Edge::dyndep(self : Edge) -> Node? {
   self.dyndep
+}
+
+///|
+pub fn Edge::id(self : Edge) -> Int32 {
+  self.id
+}
+
+///|
+pub fn Edge::implicit_deps(self : Edge) -> Int32 {
+  self.implicit_deps
+}
+
+///|
+pub fn Edge::order_only_deps(self : Edge) -> Int32 {
+  self.order_only_deps
+}
+
+///|
+pub fn Edge::implicit_outs(self : Edge) -> Int32 {
+  self.implicit_outs
+}
+
+///|
+pub fn Edge::outputs_ready(self : Edge) -> Bool {
+  self.outputs_ready
+}
+
+///|
+pub fn Edge::critical_path_weight(self : Edge) -> Int64 {
+  self.critical_path_weight
+}
+
+///|
+pub fn Edge::set_critical_path_weight(self : Edge, weight : Int64) -> Unit {
+  self.critical_path_weight = weight
+}
+
+///|
+pub fn Edge::weight(_self : Edge) -> Int32 {
+  1
+}
+
+///|
+/// Whether every input produced by another edge is ready.
+pub fn Edge::all_inputs_ready(self : Edge) -> Bool {
+  for input in self.inputs {
+    if input.in_edge is Some(edge) && !edge.outputs_ready {
+      return false
+    }
+  }
+  true
+}
+
+///|
+pub fn Edge::use_console(self : Edge) -> Bool {
+  self.pool.name == "console"
 }
 
 ///|

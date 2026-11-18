@@ -75,6 +75,11 @@ pub fn State::add_edge(self : State, rule : Rule) -> Edge {
     implicit_outs: 0,
     dyndep: None,
     platform: self.platform,
+    mark: VisitNone,
+    outputs_ready: false,
+    deps_loaded: false,
+    deps_missing: false,
+    critical_path_weight: -1,
   }
   self.edges.push(edge)
   edge
@@ -157,6 +162,24 @@ pub fn State::add_default(self : State, path : String) -> Unit raise NinjaError 
     Some(node) => self.defaults.push(node)
     None => raise Error("unknown target '\{path}'")
   }
+}
+
+///|
+/// Forgets everything learned by scanning or building, for another scan.
+pub fn State::reset(self : State) -> Unit {
+  for _, node in self.paths {
+    node.reset_state()
+  }
+  for edge in self.edges {
+    edge.outputs_ready = false
+    edge.deps_loaded = false
+    edge.mark = VisitNone
+  }
+}
+
+///|
+pub fn State::paths(self : State) -> Map[String, Node] {
+  self.paths
 }
 
 ///|

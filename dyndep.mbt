@@ -285,27 +285,7 @@ pub fn[R : FileReader] load_dyndeps(
   // The file is no longer pending once loaded.
   node.dyndep_pending = false
   DyndepParser::new(state, reader, file).load(node.path)
-  for edge in node.out_edges {
-    match edge.dyndep {
-      Some(dyndep) if physical_equal(dyndep, node) => ()
-      _ => continue
-    }
-    guard file.entries.get(edge.id) is Some(dyndeps) else {
-      raise Error(
-        "'\{edge.outputs[0].path}' not mentioned in its dyndep file '\{node.path}'",
-      )
-    }
-    dyndeps.used = true
-    update_edge(edge, dyndeps)
-  }
-  // Reject outputs the file mentions for edges without this dyndep binding.
-  let unused = file.entries.values().filter(fn(d) { !d.used }).collect()
-  unused.sort_by(fn(a, b) { a.edge.id.compare(b.edge.id) })
-  if unused is [first, ..] {
-    raise Error(
-      "dyndep file '\{node.path}' mentions output '\{first.edge.outputs[0].path}' whose build statement does not have a dyndep binding for the file",
-    )
-  }
+  apply_dyndeps(node, file)
 }
 
 ///|
