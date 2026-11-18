@@ -1,8 +1,12 @@
 ///|
 /// Where ninja's output goes, and what the terminal can do.
 pub(open) trait Terminal {
-  /// Writes to standard output.
+  /// Writes ninja's own text to standard output. On Windows ninja's stdout
+  /// is in text mode, so a host there turns LF into CRLF.
   fn write_out(Self, String) -> Unit
+  /// Writes a command's output to standard output as is (ninja switches
+  /// stdout to binary mode for it on Windows).
+  fn write_command_output(Self, String) -> Unit
   /// Writes to standard error.
   fn write_err(Self, String) -> Unit
   /// Whether stdout is a terminal that can redraw a line (ninja's
@@ -244,9 +248,15 @@ pub fn LinePrinter::print(
 }
 
 ///|
-fn LinePrinter::print_or_buffer(self : LinePrinter, data : String) -> Unit {
+fn LinePrinter::print_or_buffer(
+  self : LinePrinter,
+  data : String,
+  raw~ : Bool = false,
+) -> Unit {
   if self.console_locked {
     self.output_buffer.write_string(data)
+  } else if raw {
+    self.terminal.write_command_output(data)
   } else {
     self.terminal.write_out(data)
   }
@@ -257,6 +267,7 @@ fn LinePrinter::print_or_buffer(self : LinePrinter, data : String) -> Unit {
 pub fn LinePrinter::print_on_new_line(
   self : LinePrinter,
   text : String,
+  raw~ : Bool = false,
 ) -> Unit {
   if self.console_locked && self.line_buffer != "" {
     self.output_buffer.write_string(self.line_buffer)
@@ -267,7 +278,7 @@ pub fn LinePrinter::print_on_new_line(
     self.print_or_buffer("\n")
   }
   if text != "" {
-    self.print_or_buffer(text)
+    self.print_or_buffer(text, raw~)
   }
   self.have_blank_line = text == "" || text.has_suffix("\n")
 }
@@ -724,9 +735,9 @@ pub impl Status for StatusPrinter with fn build_edge_finished(
     // Commands get a pipe, so compilers may be told to always print color;
     // strip it again unless the terminal shows color.
     if self.printer.supports_color() || !output.contains("\u{1b}") {
-      self.printer.print_on_new_line(output)
+      self.printer.print_on_new_line(output, raw=true)
     } else {
-      self.printer.print_on_new_line(strip_ansi_escape_codes(output))
+      self.printer.print_on_new_line(strip_ansi_escape_codes(output), raw=true)
     }
   }
 }

@@ -1,0 +1,8 @@
+import {
+  "jiabin777on-hue/moonja",
+  "jiabin777on-hue/moonja/cli",
+}
+
+supported_targets = "js"
+
+pkgtype(kind: "executable")

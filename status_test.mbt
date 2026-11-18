@@ -27,6 +27,11 @@ impl @moonja.Terminal for FakeTerminal with fn write_out(self, text) {
 }
 
 ///|
+impl @moonja.Terminal for FakeTerminal with fn write_command_output(self, text) {
+  self.out.write_string(text)
+}
+
+///|
 impl @moonja.Terminal for FakeTerminal with fn write_err(self, text) {
   self.err.write_string(text)
 }
