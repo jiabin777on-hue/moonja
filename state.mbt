@@ -81,6 +81,7 @@ pub fn State::add_edge(self : State, rule : Rule) -> Edge {
     deps_missing: false,
     critical_path_weight: -1,
     command_start_time: 0,
+    prev_elapsed_time_millis: -1,
   }
   self.edges.push(edge)
   edge

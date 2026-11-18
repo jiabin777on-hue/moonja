@@ -287,6 +287,9 @@ pub struct Edge {
   mut critical_path_weight : Int64
   /// When the command started, for restat; 0 if unknown.
   mut command_start_time : Int64
+  /// How long the command took last time (from the build log), for the
+  /// ETA; -1 if unknown.
+  mut prev_elapsed_time_millis : Int64
 }
 
 ///|
@@ -360,6 +363,16 @@ pub fn Edge::critical_path_weight(self : Edge) -> Int64 {
 ///|
 pub fn Edge::set_critical_path_weight(self : Edge, weight : Int64) -> Unit {
   self.critical_path_weight = weight
+}
+
+///|
+pub fn Edge::prev_elapsed_time_millis(self : Edge) -> Int64 {
+  self.prev_elapsed_time_millis
+}
+
+///|
+pub fn Edge::set_prev_elapsed_time_millis(self : Edge, millis : Int64) -> Unit {
+  self.prev_elapsed_time_millis = millis
 }
 
 ///|
