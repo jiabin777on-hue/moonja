@@ -37,9 +37,47 @@ pub fn[D : Disk] append_text(
 ///|
 struct MemoryFile {
   mut mtime : Int64
-  mut contents : Bytes
+  /// Appends are amortized O(1); `contents` copies out on demand.
+  buffer : Buffer
+  mut snapshot : Bytes?
   /// When set, `stat` fails with this message.
   mut stat_error : String
+}
+
+///|
+fn MemoryFile::new(
+  mtime : Int64,
+  contents : Bytes,
+  stat_error : String,
+) -> MemoryFile {
+  let buffer = Buffer(capacity=contents.length())
+  buffer.write_bytes(contents)
+  { mtime, buffer, snapshot: Some(contents), stat_error, }
+}
+
+///|
+fn MemoryFile::contents(self : MemoryFile) -> Bytes {
+  match self.snapshot {
+    Some(bytes) => bytes
+    None => {
+      let bytes = self.buffer.to_bytes()
+      self.snapshot = Some(bytes)
+      bytes
+    }
+  }
+}
+
+///|
+fn MemoryFile::replace(self : MemoryFile, contents : Bytes) -> Unit {
+  self.buffer.reset()
+  self.buffer.write_bytes(contents)
+  self.snapshot = Some(contents)
+}
+
+///|
+fn MemoryFile::append(self : MemoryFile, contents : Bytes) -> Unit {
+  self.buffer.write_bytes(contents)
+  self.snapshot = None
 }
 
 ///|
@@ -89,9 +127,9 @@ pub fn MemoryDisk::create_bytes(
   match self.files.get(path) {
     Some(file) => {
       file.mtime = self.now
-      file.contents = contents
+      file.replace(contents)
     }
-    None => self.files[path] = { mtime: self.now, contents, stat_error: "", }
+    None => self.files[path] = MemoryFile::new(self.now, contents, "")
   }
   if !self.files_created.contains(path) {
     self.files_created.push(path)
@@ -120,8 +158,7 @@ pub fn MemoryDisk::set_stat_error(
       file.mtime = -1
       file.stat_error = message
     }
-    None =>
-      self.files[path] = { mtime: -1, contents: b"", stat_error: message, }
+    None => self.files[path] = MemoryFile::new(-1, b"", message)
   }
 }
 
@@ -133,18 +170,18 @@ pub fn MemoryDisk::set_mtime(
 ) -> Unit {
   match self.files.get(path) {
     Some(file) => file.mtime = mtime
-    None => self.files[path] = { mtime, contents: b"", stat_error: "", }
+    None => self.files[path] = MemoryFile::new(mtime, b"", "")
   }
 }
 
 ///|
 pub fn MemoryDisk::contents(self : MemoryDisk, path : String) -> String? {
-  self.files.get(path).map(fn(file) { @utf8.decode_lossy(file.contents) })
+  self.files.get(path).map(fn(file) { @utf8.decode_lossy(file.contents()) })
 }
 
 ///|
 pub fn MemoryDisk::bytes(self : MemoryDisk, path : String) -> Bytes? {
-  self.files.get(path).map(fn(file) { file.contents })
+  self.files.get(path).map(fn(file) { file.contents() })
 }
 
 ///|
@@ -200,13 +237,13 @@ pub impl Disk for MemoryDisk with fn write_file(self, path, contents) {
 ///|
 pub impl Disk for MemoryDisk with fn read_file(self, path) {
   self.files_read.push(path)
-  self.files.get(path).map(fn(file) { @utf8.decode_lossy(file.contents) })
+  self.files.get(path).map(fn(file) { @utf8.decode_lossy(file.contents()) })
 }
 
 ///|
 pub impl Disk for MemoryDisk with fn read_bytes(self, path) {
   self.files_read.push(path)
-  self.files.get(path).map(fn(file) { file.contents })
+  self.files.get(path).map(fn(file) { file.contents() })
 }
 
 ///|
@@ -227,7 +264,7 @@ pub impl Disk for MemoryDisk with fn remove_file(self, path) {
 pub impl Disk for MemoryDisk with fn append_bytes(self, path, contents) {
   match self.files.get(path) {
     Some(file) => {
-      file.contents = file.contents + contents
+      file.append(contents)
       file.mtime = self.now
     }
     None => self.create_bytes(path, contents)
@@ -248,8 +285,9 @@ pub impl Disk for MemoryDisk with fn truncate_file(self, path, size) {
   guard self.files.get(path) is Some(file) else {
     raise Error("No such file or directory")
   }
-  if size < file.contents.length() {
-    file.contents = file.contents[0:size].to_owned()
+  let contents = file.contents()
+  if size < contents.length() {
+    file.replace(contents[0:size].to_owned())
   }
 }
 
@@ -257,7 +295,7 @@ pub impl Disk for MemoryDisk with fn truncate_file(self, path, size) {
 pub impl FileReader for MemoryDisk with fn read_file(self, path) {
   self.files_read.push(path)
   match self.files.get(path) {
-    Some(file) => @utf8.decode_lossy(file.contents)
+    Some(file) => @utf8.decode_lossy(file.contents())
     None => raise Error("No such file or directory")
   }
 }
