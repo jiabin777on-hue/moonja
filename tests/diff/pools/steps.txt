@@ -1,0 +1,3 @@
+run -j4 all
+run -j4 all
+run -j1 talk

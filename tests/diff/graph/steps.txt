@@ -1,0 +1,12 @@
+run -j1
+run -j1
+touch b.in
+run -j1
+touch gen.h
+run -j1
+run -j1 alias
+run -j1 a.in^
+run -j1 b.in^
+run -n -j1 app
+rm check.stamp
+run -j1

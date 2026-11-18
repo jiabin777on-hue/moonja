@@ -131,7 +131,22 @@ extern "js" fn js_read_bytes(path : String) -> Bytes =
   #|     return new Uint8Array(m.fs.readFileSync(p));
   #|   } catch (e) {
   #|     m.kind = e.code === "ENOENT" ? 1 : 2;
-  #|     m.error = m.text(e);
+  #|     if (m.windows) {
+  #|       // ninja reads with CreateFileA and reports FormatMessage's text,
+  #|       // which ends in CRLF.
+  #|       if (e.code === "ENOENT") {
+  #|         const dir = m.path.dirname(m.path.resolve(p));
+  #|         m.error = m.fs.existsSync(dir)
+  #|           ? "The system cannot find the file specified.\r\n"
+  #|           : "The system cannot find the path specified.\r\n";
+  #|       } else if (e.code === "EACCES" || e.code === "EISDIR" || e.code === "EPERM") {
+  #|         m.error = "Access is denied.\r\n";
+  #|       } else {
+  #|         m.error = `${e.message}\r\n`;
+  #|       }
+  #|     } else {
+  #|       m.error = m.text(e);
+  #|     }
   #|     return new Uint8Array(0);
   #|   }
   #| }

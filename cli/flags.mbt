@@ -537,7 +537,19 @@ fn parse_args(
       i = len
       break
     }
-    if arg.has_prefix("--") {
+    // ninja's getopt on Windows reads an unknown long option as short
+    // options from its third character (`--bogus` is `-b`...).
+    let mut short_start = 1
+    if arg.has_prefix("--") &&
+      host.platform is Windows &&
+      arg.length() > 2 &&
+      !long_options
+      .iter()
+      .any(fn(o) {
+        o.has_prefix(arg.unsafe_substring(start=2, end=arg.length()))
+      }) {
+      short_start = 2
+    } else if arg.has_prefix("--") {
       let body = arg.unsafe_substring(start=2, end=arg.length())
       let (name, has_value) = match body.find("=") {
         Some(eq) => (body.unsafe_substring(start=0, end=eq), true)
@@ -590,7 +602,7 @@ fn parse_args(
       continue
     }
     if arg.length() > 1 && arg.unsafe_get(0) == '-' {
-      let mut j = 1
+      let mut j = short_start
       while j < arg.length() {
         let c = arg.unsafe_get(j)
         j += 1

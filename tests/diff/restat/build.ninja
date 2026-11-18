@@ -1,0 +1,7 @@
+rule gen
+  command = node t.js restat $out $in
+  restat = 1
+rule cp
+  command = node t.js cp $in $out
+build gen.txt: gen src.txt
+build final.txt: cp gen.txt

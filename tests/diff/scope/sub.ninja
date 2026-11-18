@@ -1,0 +1,5 @@
+greeting = subscope
+rule sayagain
+  command = node t.js echo again $greeting $in
+build three: sayagain x.in
+build four: say x.in

@@ -1,0 +1,6 @@
+run -j1
+touch src.txt
+run -j1
+run -j1
+write src.txt v2
+run -j1

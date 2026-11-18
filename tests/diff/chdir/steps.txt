@@ -1,0 +1,5 @@
+run -C inner
+run -C inner
+run -C nowhere
+run -C inner --quiet
+run -C inner -t list

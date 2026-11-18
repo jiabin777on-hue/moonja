@@ -1,0 +1,25 @@
+run -f duprule.ninja
+run -f norule.ninja
+run -f cycle.ninja
+run -f dupedge.ninja
+run -f baddefault.ninja
+run -f badbinding.ninja
+run -f phonycycle.ninja
+run -f phonycycle.ninja -w phonycycle=err
+run -f newer.ninja
+run -f older.ninja
+run -f badinclude.ninja
+run -f badpool.ninja
+run -f badeof.ninja
+run -f badvar.ninja
+run -f badescape.ninja
+run -f missinginput.ninja
+run -f nosuchfile.ninja
+run -w bogus
+run -w phonycyle=err
+run -d bogus
+run -d explian
+run -t targts
+run -k x
+run -l x
+run --bogus

@@ -1,0 +1,14 @@
+rule cp
+  command = node t.js cp $in $out
+rule fail
+  command = node t.js fail $code something went wrong
+rule warn
+  command = node t.js warn careful && node t.js cp $in $out
+build ok1: cp in.txt
+build bad1: fail ok1
+  code = 3
+build bad2: fail in.txt
+  code = 1
+build ok2: warn in.txt
+build after: cp bad1
+build all: phony after bad2 ok2

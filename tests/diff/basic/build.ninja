@@ -1,0 +1,9 @@
+rule cp
+  command = node t.js cp $in $out
+  description = CP $out
+rule cat
+  command = node t.js cat $out $in
+build mid.txt: cp a.in
+build all.txt: cat mid.txt b.in
+build other.txt: cp b.in
+default all.txt

@@ -1,0 +1,8 @@
+rule regen
+  command = node t.js cp build.ninja.in build.ninja
+  generator = 1
+  description = Regenerating build.ninja
+rule cp
+  command = node t.js cp $in $out
+build build.ninja: regen build.ninja.in
+build out.txt: cp data.txt

@@ -1,0 +1,4 @@
+rule cp
+  command = node t.js cp $in $out
+build a: cp x.in
+build a: cp x.in

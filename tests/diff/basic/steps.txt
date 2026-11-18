@@ -1,0 +1,10 @@
+run -j1
+run -j1
+touch b.in
+run -j1
+write a.in changed
+run -j1 all.txt other.txt
+run -j1 all.txt other.txt
+rm mid.txt
+run -j1
+run -n

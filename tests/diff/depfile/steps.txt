@@ -1,0 +1,9 @@
+run -j1
+run -j1
+touch a.h
+run -j1
+touch b.h
+run -j1
+run -j1 -d explain
+touch a.h
+run -j1 -d explain

@@ -1,0 +1,5 @@
+run -j1
+run -j1
+touch build.ninja.in
+run -j1
+run -j1

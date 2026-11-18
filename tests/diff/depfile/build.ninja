@@ -1,0 +1,12 @@
+rule cc
+  command = node t.js cc $out $out.d $in $headers
+  depfile = $out.d
+  deps = gcc
+  description = CC $out
+rule ccmake
+  command = node t.js cc $out $out.d $in $headers
+  depfile = $out.d
+build main.o: cc main.c
+  headers = a.h
+build other.o: ccmake main.c
+  headers = b.h

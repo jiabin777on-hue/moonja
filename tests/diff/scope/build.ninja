@@ -1,0 +1,12 @@
+greeting = hello
+dir = sub
+include vars.ninja
+rule say
+  command = node t.js echo $greeting $who $$literal $
+      continued "$out"
+  description = SAY $out ($greeting)
+build $dir/one: say x.in
+  who = one
+subninja sub.ninja
+build two: say x.in
+  greeting = hi

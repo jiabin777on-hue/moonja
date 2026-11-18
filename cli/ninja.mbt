@@ -167,14 +167,19 @@ fn Ninja::load_manifest(self : Ninja) -> Unit raise Quit {
     parser.load(self.options.input_file)
     None
   } catch {
-    error => Some(error.message())
+    error => Some(error)
   }
   for warning in parser.warnings() {
     self.warning(warning)
   }
-  if failure is Some(message) {
-    self.error(message)
-    raise Quit(1)
+  match failure {
+    None => ()
+    // ninja calls Fatal() for an incompatible ninja_required_version.
+    Some(Fatal(_) as error) => self.host.fatal(error.message())
+    Some(error) => {
+      self.error(error.message())
+      raise Quit(1)
+    }
   }
 }
 
@@ -336,11 +341,12 @@ fn Ninja::drive(
   builder : @moonja.Builder,
   done : (@moonja.ExitStatus, String) -> Unit raise Quit,
 ) -> Unit raise Quit {
+  // ninja's Builder always cleans up when destroyed, after a successful
+  // build too: that is what removes .ninja_lock.
   if self.config.dry_run {
-    let (status, message) = builder.build(DryRunRunner::{
-      finished: [],
-      next: 0,
-    })
+    let runner = DryRunRunner::{ finished: [], next: 0, }
+    let (status, message) = builder.build(runner)
+    builder.cleanup(runner)
     done(status, message)
     return
   }
@@ -350,6 +356,7 @@ fn Ninja::drive(
       Waiting => ()
       Finished(status, message) => {
         self.interrupt.val = None
+        builder.cleanup(runner)
         done(status, message)
       }
     }

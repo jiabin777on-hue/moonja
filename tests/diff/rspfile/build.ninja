@@ -1,0 +1,7 @@
+rule link
+  command = node t.js rsp $out $out.rsp
+  rspfile = $out.rsp
+  rspfile_content = $in --flag $in_newline
+build prog: link x.in
+build prog2: link x.in
+  rspfile_content = custom $out

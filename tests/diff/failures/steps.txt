@@ -1,0 +1,10 @@
+run -j1
+run -j1 -k 0
+run -j1 -k 2 all
+run -j1 ok2
+run -j1 ok2
+run -n all
+run -j1 nonexistent
+run -j1 ok
+run -j1 clean
+run -j1 help

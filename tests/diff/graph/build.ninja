@@ -1,0 +1,14 @@
+rule cp
+  command = node t.js cp $in $out
+rule cat
+  command = node t.js cat $out $in
+rule stamp
+  command = node t.js write $out stamped
+build gen.h: cp a.in
+build lib.o | lib.extra: cat a.in | b.in || gen.h
+build lib.extra: phony
+build check.stamp: stamp lib.o
+build app: cat lib.o |@ check.stamp
+build all: phony app
+build alias: phony lib.o
+default all

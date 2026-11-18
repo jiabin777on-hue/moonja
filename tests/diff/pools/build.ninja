@@ -1,0 +1,13 @@
+pool one
+  depth = 1
+rule slow
+  command = node t.js cp $in $out
+  pool = one
+rule loud
+  command = node t.js echo console says hi
+  pool = console
+build a1: slow p.in
+build a2: slow p.in
+build a3: slow p.in
+build talk: loud
+build all: phony a1 a2 a3 talk

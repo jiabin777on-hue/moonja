@@ -1,0 +1,7 @@
+rule dd
+  command = node t.js dyndep $out out.txt extra.txt
+rule cp
+  command = node t.js cp $in $out
+build out.dd: dd in.txt
+build out.txt: cp in.txt || out.dd
+  dyndep = out.dd
