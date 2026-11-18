@@ -1,0 +1,7 @@
+moonja
+Copyright 2026 moonja contributors
+
+This project ports behavior and tests from Ninja (https://github.com/ninja-build/ninja,
+v1.13.2), Copyright Google Inc., licensed under the Apache License 2.0, and takes
+design inspiration from n2 (https://github.com/evmar/n2), licensed under the
+Apache License 2.0.
