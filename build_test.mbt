@@ -8,7 +8,7 @@ struct FakeRunner {
   fs : @moonja.MemoryDisk
   commands_ran : Array[String]
   active_edges : Array[@moonja.Edge]
-  max_active_edges : Int32
+  mut max_active_edges : Int32
   /// Failures found inside wait_for_command, checked by the tests.
   errors : Array[String]
 }
@@ -57,7 +57,10 @@ impl @moonja.CommandRunner for FakeRunner with fn start_command(self, edge) {
     | "touch-fail-tick2" => touch_outputs(fs, edge)
     "true" | "fail" | "interrupt" | "console" => ()
     "cp" =>
-      match fs.contents(edge.inputs()[0].path()) {
+      match
+        (@moonja.Disk::read_file(fs, edge.inputs()[0].path()) catch {
+          _ => None
+        }) {
         Some(content) => fs.create(edge.outputs()[0].path(), content)
         None => ()
       }
