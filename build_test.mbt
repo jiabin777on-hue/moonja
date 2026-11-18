@@ -851,3 +851,12 @@ test "BuildTest.PoolEdgesReadyButNotWanted" {
   f.rebuild_target("final.stamp", manifest, state=save_state)
   assert_true(save_state.lookup_pool("some_pool").unwrap().current_use() >= 0)
 }
+
+///|
+test "ExitStatus codes round trip" {
+  for code in [0, 1, 2, 127, 130, 255] {
+    assert_eq(@moonja.ExitStatus::from_code(code).code(), code)
+  }
+  assert_eq(@moonja.ExitStatus::from_code(130), Interrupted)
+  assert_eq(@moonja.ExitStatus::from_code(127), Exited(127))
+}

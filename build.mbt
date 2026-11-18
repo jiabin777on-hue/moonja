@@ -2,18 +2,37 @@
 /// How a build or a command ended (ninja's `ExitStatus`).
 #derive(Eq, Debug)
 pub(all) enum ExitStatus {
+  /// Exit code 0.
   Success
+  /// Exit code 1.
   Failure
+  /// Exit code 130: the user interrupted the build, or a command died of
+  /// SIGINT, SIGTERM or SIGHUP.
   Interrupted
+  /// Any other exit code, propagated from a failing command.
+  Exited(Int32)
 }
 
 ///|
-/// The process exit code ninja uses for the status.
+/// The status for a process exit code. ninja's `ExitStatus` is the exit
+/// code itself, so a command exiting with 127 makes ninja exit with 127.
+pub fn ExitStatus::from_code(code : Int32) -> ExitStatus {
+  match code {
+    0 => Success
+    1 => Failure
+    130 => Interrupted
+    _ => Exited(code)
+  }
+}
+
+///|
+/// The process exit code for the status.
 pub fn ExitStatus::code(self : ExitStatus) -> Int32 {
   match self {
     Success => 0
     Failure => 1
-    Interrupted => 2
+    Interrupted => 130
+    Exited(code) => code
   }
 }
 
