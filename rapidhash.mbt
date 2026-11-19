@@ -43,21 +43,23 @@ fn rapid_mix(a : UInt64, b : UInt64) -> UInt64 {
 }
 
 ///|
+/// The little-endian 32-bit word at `i`. Assembled in 32-bit arithmetic:
+/// on the JS backend UInt64 is a BigInt, and each BigInt operation costs.
+fn rapid_word32(p : Bytes, i : Int32) -> UInt32 {
+  p[i].to_uint() |
+  (p[i + 1].to_uint() << 8) |
+  (p[i + 2].to_uint() << 16) |
+  (p[i + 3].to_uint() << 24)
+}
+
+///|
 fn rapid_read64(p : Bytes, i : Int32) -> UInt64 {
-  let mut v : UInt64 = 0
-  for k in 0..<8 {
-    v = v | (p[i + k].to_uint64() << (8 * k))
-  }
-  v
+  rapid_word32(p, i).to_uint64() | (rapid_word32(p, i + 4).to_uint64() << 32)
 }
 
 ///|
 fn rapid_read32(p : Bytes, i : Int32) -> UInt64 {
-  let mut v : UInt64 = 0
-  for k in 0..<4 {
-    v = v | (p[i + k].to_uint64() << (8 * k))
-  }
-  v
+  rapid_word32(p, i).to_uint64()
 }
 
 ///|

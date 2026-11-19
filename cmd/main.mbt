@@ -29,7 +29,7 @@ extern "js" fn setup() -> Unit =
   #|     EIO: "Input/output error", EXDEV: "Invalid cross-device link",
   #|   };
   #|   const text = (e) => posixText[e && e.code] || (e && e.message) || String(e);
-  #|   const writeAll = (fd, s) => {
+  #|   const writeRaw = (fd, s) => {
   #|     const buf = Buffer.from(s, "utf8");
   #|     let off = 0;
   #|     while (off < buf.length) {
@@ -40,13 +40,38 @@ extern "js" fn setup() -> Unit =
   #|       }
   #|     }
   #|   };
+  #|   // stdout is buffered until stderr is written, a console command
+  #|   // starts, the process exits, or control returns to the event loop, so
+  #|   // the order of the two streams is kept.
+  #|   let pending = [];
+  #|   let scheduled = false;
+  #|   const flush = () => {
+  #|     scheduled = false;
+  #|     if (pending.length === 0) return;
+  #|     const s = pending.join("");
+  #|     pending = [];
+  #|     writeRaw(1, s);
+  #|   };
+  #|   const writeAll = (fd, s) => {
+  #|     if (fd !== 1) {
+  #|       flush();
+  #|       writeRaw(fd, s);
+  #|       return;
+  #|     }
+  #|     pending.push(s);
+  #|     if (!scheduled) {
+  #|       scheduled = true;
+  #|       setImmediate(flush);
+  #|     }
+  #|   };
   #|   globalThis.__moonja = {
-  #|     fs, os, path, cp, tty, windows, text, writeAll,
+  #|     fs, os, path, cp, tty, windows, text, writeAll, flush,
   #|     // 0 ok, 1 missing, 2 error (message in `error`).
   #|     kind: 0, error: "",
   #|     children: new Set(), temps: new Set(), counter: 0,
   #|   };
   #|   process.on("exit", () => {
+  #|     flush();
   #|     for (const t of globalThis.__moonja.temps) {
   #|       try { fs.unlinkSync(t); } catch {}
   #|     }
@@ -272,6 +297,7 @@ extern "js" fn js_spawn(
   #|     m.temps.add(temp);
   #|   }
   #|   // stdin is empty; stdout and stderr share one file, like ninja's pipe.
+  #|   if (useConsole) m.flush();
   #|   const stdio = useConsole ? "inherit" : ["ignore", fd, fd];
   #|   let child;
   #|   try {
@@ -405,7 +431,10 @@ extern "js" fn js_on_interrupt(handler : () -> Unit) -> Unit =
 
 ///|
 extern "js" fn js_exit(code : Int32) -> Unit =
-  #| (code) => process.exit(code)
+  #| (code) => {
+  #|   globalThis.__moonja.flush();
+  #|   process.exit(code);
+  #| }
 
 ///|
 /// The file system through Node's `fs`.
