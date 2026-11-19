@@ -52,6 +52,20 @@ pub struct ImplicitDepLoader {
   deps_log : DepsLog?
   disk : &Disk
   explanations : Explanations?
+  /// When set, depfile deps are collected here and the graph is left alone
+  /// (ninja's `NodeStoringImplicitDepLoader`, for `-t missingdeps`).
+  store : Array[Node]?
+}
+
+///|
+pub fn ImplicitDepLoader::new(
+  state : State,
+  disk : &Disk,
+  deps_log? : DepsLog,
+  explanations? : Explanations,
+  store? : Array[Node],
+) -> ImplicitDepLoader {
+  { state, deps_log, disk, explanations, store, }
 }
 
 ///|
@@ -126,6 +140,16 @@ fn ImplicitDepLoader::process_depfile_deps(
   edge : Edge,
   ins : Array[String],
 ) -> Unit {
+  if self.store is Some(store) {
+    for input in ins {
+      let (path, slash_bits) = canonicalize_path(
+        input,
+        platform=self.state.platform,
+      )
+      store.push(self.state.get_node(path, slash_bits))
+    }
+    return
+  }
   // The new deps go before the order-only ones.
   let at = edge.inputs.length() - edge.order_only_deps
   for i, input in ins {
@@ -197,7 +221,7 @@ pub fn DependencyScan::new(
     state,
     build_log,
     disk,
-    dep_loader: { state, deps_log, disk, explanations, },
+    dep_loader: { state, deps_log, disk, explanations, store: None, },
     explanations,
   }
 }
