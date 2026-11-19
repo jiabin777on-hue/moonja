@@ -1,5 +1,7 @@
 # moonja
 
+[![CI](https://github.com/jiabin777on-hue/moonja/actions/workflows/ci.yml/badge.svg)](https://github.com/jiabin777on-hue/moonja/actions/workflows/ci.yml)
+
 > A drop-in replacement for [Ninja](https://ninja-build.org/) 1.13.2, written in MoonBit. It is verified by porting ninja's own unit tests and by differential testing against the real ninja binary.
 
 用 MoonBit 实现、可直接替换 Ninja 的构建工具。兼容目标固定为 **ninja v1.13.2**，验证手段有两条：
@@ -63,7 +65,7 @@ $ node _build/js/release/build/cmd/cmd.js -C path/to/project
 - 全部步骤结束后的整个文件树内容；
 - `.ninja_log` 中每条记录的输出路径和命令哈希。
 
-目前有 16 个用例、162 次运行：基本构建与增量、失败与 `-k`、depfile/deps 日志、restat、清单自重建、phony/order-only/validation、rspfile、dyndep、作用域与转义、25 种错误信息、pool 与 console、`-C`，以及全部子工具在构建前后的输出。在 Windows 上已经全部逐字节一致；CI 已配置为在 Linux 和 Windows 上用 `pip install ninja==1.13.2` 作为参照运行全部用例。
+目前有 16 个用例、162 次运行：基本构建与增量、失败与 `-k`、depfile/deps 日志、restat、清单自重建、phony/order-only/validation、rspfile、dyndep、作用域与转义、25 种错误信息、pool 与 console、`-C`，以及全部子工具在构建前后的输出。CI 在 Linux（ubuntu-latest）和 Windows（windows-latest）上，以 `pip install ninja==1.13.2` 作为参照运行全部用例，两个平台都逐字节一致。
 
 ```console
 $ moon build --target js
