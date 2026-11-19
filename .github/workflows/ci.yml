@@ -129,3 +129,13 @@ jobs:
           moonja -C "$RUNNER_TEMP/build" | tee out.txt
           grep -q "Re-running CMake" out.txt
           moonja -C "$RUNNER_TEMP/build" | grep -q "no work to do"
+      - name: ninja and moonja share the build directory
+        run: |
+          python3 -m pip install ninja==1.13.2
+          # The real ninja accepts moonja's logs as up to date...
+          ninja -C "$RUNNER_TEMP/build" | tee out.txt && grep -q "no work to do" out.txt
+          # ...rebuilds what changed, and moonja then accepts ninja's.
+          touch "$RUNNER_TEMP/ninja-src/src/util.h"
+          ninja -C "$RUNNER_TEMP/build" | tee out.txt
+          ! grep -q "no work to do" out.txt
+          moonja -C "$RUNNER_TEMP/build" | grep -q "no work to do"
