@@ -84,6 +84,25 @@ ok   basic (7 runs)
 
 我还验证过框架本身：把 `no work to do.` 改掉一个字符，差分测试会立刻报告。
 
+### 3. ninja 官方的集成测试
+
+CI 会拉取 ninja v1.13.2 源码，把 moonja 当作 `./ninja`，运行 ninja 官方的 [`misc/output_test.py`](https://github.com/ninja-build/ninja/blob/v1.13.2/misc/output_test.py)。这套测试在伪终端里驱动构建工具，覆盖了差分测试看不到的行为：
+- 智能终端上状态行的单行刷新（`\r…\x1b[K`）；
+- 颜色仅在输出被管道接走时剥离、`CLICOLOR_FORCE`；
+- console pool 不会死锁；
+- 收到 SIGINT/SIGHUP/SIGTERM 时退出码为 130；
+- 各种退出码的透传、dyndep 冲突报错、`-d explain` 的输出位置，以及 `inputs`/`multi-inputs`/`compdb-targets` 等工具。
+
+moonja 全部通过。
+
+### 4. 构建真实项目：用 moonja 编译 ninja
+
+CI 用 CMake 的 Ninja 生成器（`-DCMAKE_MAKE_PROGRAM=moonja`）配置 ninja 自己的源码，由 moonja 完成整个编译，然后：
+- 运行编出来的 `ninja_test`，ninja 的全部单元测试通过；
+- 第二次构建输出 `no work to do.`；
+- 修改头文件后只重编依赖它的目标（依赖来自 `deps = gcc` 写入的 `.ninja_deps`）；
+- 修改 `CMakeLists.txt` 后，moonja 会通过 generator 边重新运行 CMake、重新加载清单并继续构建。
+
 ## 性能
 
 `scripts/bench.mjs` 仿照 ninja 的 `misc/write_fake_manifests.py` 生成工程：1 万个带 gcc deps 的目标文件，分布在 200 个目录中，再链接成库和可执行文件，共 10201 条边，清单 1 MiB。先用 ninja 完整构建一次，再分别计时，每项取 5 次的中位数：

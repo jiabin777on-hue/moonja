@@ -79,7 +79,8 @@ jobs:
           dir="$RUNNER_TEMP/output-test"
           mkdir -p "$dir"
           cp "$RUNNER_TEMP/ninja-src/misc/output_test.py" "$dir/"
-          printf '#!/bin/sh\nexec node %s "$@"\n' "$GITHUB_WORKSPACE/_build/js/release/build/cmd/cmd.js" > "$dir/ninja"
+          # Absolute paths: some tests run ninja with an empty environment.
+          printf '#!/bin/sh\nexec %s %s "$@"\n' "$(command -v node)" "$GITHUB_WORKSPACE/_build/js/release/build/cmd/cmd.js" > "$dir/ninja"
           chmod +x "$dir/ninja"
           cd "$dir" && python3 output_test.py -v
 
@@ -101,7 +102,7 @@ jobs:
       - name: Install moonja as `moonja`
         run: |
           mkdir -p "$RUNNER_TEMP/bin"
-          printf '#!/bin/sh\nexec node %s "$@"\n' "$GITHUB_WORKSPACE/_build/js/release/build/cmd/cmd.js" > "$RUNNER_TEMP/bin/moonja"
+          printf '#!/bin/sh\nexec %s %s "$@"\n' "$(command -v node)" "$GITHUB_WORKSPACE/_build/js/release/build/cmd/cmd.js" > "$RUNNER_TEMP/bin/moonja"
           chmod +x "$RUNNER_TEMP/bin/moonja"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Fetch ninja 1.13.2
