@@ -55,9 +55,14 @@ pub fn filter_input_filename(line : String) -> Bool {
 }
 
 ///|
-/// Port of ninja's `CLParser::Parse` (its non-Windows path normalization:
-/// paths are canonicalized, not made relative to the working directory).
-pub fn parse_cl_output(output : String, deps_prefix : String) -> ClOutput {
+/// Port of ninja's `CLParser::Parse`. With a `normalizer` (ninja on
+/// Windows) include paths are made relative to its directory; without one
+/// they are only canonicalized, as on other systems.
+pub fn parse_cl_output(
+  output : String,
+  deps_prefix : String,
+  normalizer? : IncludesNormalize,
+) -> ClOutput raise NinjaError {
   let includes : Map[String, Unit] = Map([])
   let filtered = StringBuilder()
   let mut seen_show_includes = false
@@ -74,7 +79,10 @@ pub fn parse_cl_output(output : String, deps_prefix : String) -> ClOutput {
     let included = filter_show_includes(line, deps_prefix)
     if included != "" {
       seen_show_includes = true
-      let (normalized, _) = canonicalize_path(included)
+      let normalized = match normalizer {
+        Some(n) => n.normalize(included)
+        None => canonicalize_path(included).0
+      }
       if !is_system_include(normalized) {
         includes[normalized] = ()
       }

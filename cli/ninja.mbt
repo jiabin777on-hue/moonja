@@ -329,6 +329,7 @@ fn Ninja::new_builder(self : Ninja) -> @moonja.Builder {
     deps_log=self.deps_log,
     start_time_millis=self.start_time_millis,
     clock=self.host.now_millis,
+    cwd=(self.host.cwd)(),
   )
   self.status.set_explanations(builder.explanations())
   builder

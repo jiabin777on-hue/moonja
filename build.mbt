@@ -689,6 +689,8 @@ pub struct Builder {
   explanations : Explanations?
   lock_file_path : String
   start_time_millis : Int64
+  /// The working directory, for `deps = msvc` on Windows.
+  cwd : String
   /// Milliseconds on any fixed clock.
   clock : () -> Int64
   /// Start times of running edges, relative to the build start, by id.
@@ -708,6 +710,7 @@ pub fn Builder::new(
   deps_log? : DepsLog,
   start_time_millis~ : Int64 = 0,
   clock~ : () -> Int64 = fn() { 0 },
+  cwd~ : String = "C:\\",
 ) -> Builder {
   let explanations = if config.explain {
     Some(Explanations::new())
@@ -732,6 +735,7 @@ pub fn Builder::new(
     explanations,
     lock_file_path,
     start_time_millis,
+    cwd,
     clock,
     running_edges: Map([]),
     exit_code: Success,
@@ -1140,7 +1144,15 @@ fn Builder::extract_deps(
 ) -> Result[Array[Node], String] raise NinjaError {
   match deps_type {
     "msvc" => {
-      let parsed = parse_cl_output(result.output, deps_prefix)
+      let normalizer = if self.state.platform is Windows {
+        Some(IncludesNormalize::new(".", self.cwd))
+      } else {
+        None
+      }
+      let parsed = parse_cl_output(result.output, deps_prefix, normalizer?) catch {
+        Fatal(_) as error => raise error
+        error => return Err(error.message())
+      }
       result.output = parsed.filtered
       // All backslashes: some of them certainly are, and MSVC paths do not
       // reach command lines.
