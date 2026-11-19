@@ -1,0 +1,8 @@
+run -j1 use_c use_a
+run -j1 use_c use_a
+touch in.txt
+run -j1 -d explain use_c use_a
+rm c
+run -j1 -d explain use_c
+run -j1 dm
+run -j1 -d explain dm

@@ -1,0 +1,10 @@
+rule cl
+  command = node t.js msvc $out $in inc/a.h b.h
+  deps = msvc
+  description = CL $out
+rule cl_prefix
+  command = node t.js msvc $out $in b.h
+  deps = msvc
+  msvc_deps_prefix = Note: including file:
+build main.obj: cl main.c
+build other.obj: cl_prefix main.c

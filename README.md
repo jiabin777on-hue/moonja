@@ -63,14 +63,14 @@ $ node _build/js/release/build/cmd/cmd.js -C path/to/project
 - 全部步骤结束后的整个文件树内容；
 - `.ninja_log` 中每条记录的输出路径和命令哈希。
 
-目前有 13 个用例、142 次运行：基本构建与增量、失败与 `-k`、depfile/deps 日志、restat、清单自重建、phony/order-only/validation、rspfile、dyndep、作用域与转义、25 种错误信息、pool 与 console、`-C`，以及全部子工具在构建前后的输出。在 Windows 上已经全部逐字节一致；CI 已配置为在 Linux 和 Windows 上用 `pip install ninja==1.13.2` 作为参照运行全部用例。
+目前有 16 个用例、162 次运行：基本构建与增量、失败与 `-k`、depfile/deps 日志、restat、清单自重建、phony/order-only/validation、rspfile、dyndep、作用域与转义、25 种错误信息、pool 与 console、`-C`，以及全部子工具在构建前后的输出。在 Windows 上已经全部逐字节一致；CI 已配置为在 Linux 和 Windows 上用 `pip install ninja==1.13.2` 作为参照运行全部用例。
 
 ```console
 $ moon build --target js
 $ node scripts/difftest.mjs --ninja "$(which ninja)"
 ok   basic (7 runs)
 ...
-13/13 cases identical, 142 runs compared
+16/16 cases identical, 162 runs compared
 ```
 
 差分测试找到并修复了不少单元测试没有覆盖到的问题，例如：

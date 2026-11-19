@@ -1,0 +1,7 @@
+rule cp
+  command = node t.js cp "$in" "$out"
+  description = 复制 $out
+build 输出/结果.txt: cp 源文件.txt
+build out$ dir/copy$ 1.txt: cp with$ space.txt
+build 全部: phony 输出/结果.txt out$ dir/copy$ 1.txt
+default 全部

@@ -1,0 +1,8 @@
+run -j1
+run -j1
+touch inc/a.h
+run -j1 -d explain
+run -t deps
+run -t query main.obj
+touch b.h
+run -j1

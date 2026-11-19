@@ -1,0 +1,9 @@
+run -j1
+run -j1
+touch 源文件.txt
+run -j1 -v
+run -t targets all
+run -t query 输出/结果.txt
+run 输出/结果.tx
+run -t inputs 全部
+run -t clean

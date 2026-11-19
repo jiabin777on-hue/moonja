@@ -10,6 +10,10 @@
 //   node t.js restat DST SRC      copy only if the contents changed
 //   node t.js write DST TEXT...   write TEXT to DST
 //   node t.js rsp DST RSPFILE     copy the response file into DST
+//   node t.js msvc OUT SRC HEADER...
+//                                 like cl /showIncludes
+//   node t.js multi TEXT... -- OUT...
+//                                 write TEXT to every OUT
 //   node t.js dyndep DD OUT INPUT...
 //                                 write a dyndep file making OUT depend on
 //                                 the INPUTs
@@ -53,6 +57,23 @@ switch (op) {
   case "dyndep": {
     const [dd, out, ...inputs] = args;
     fs.writeFileSync(dd, `ninja_dyndep_version = 1\nbuild ${out}: dyndep | ${inputs.join(" ")}\n`);
+    break;
+  }
+  case "msvc": {
+    // "cl /showIncludes": echoes the source name, lists headers by
+    // absolute path, then writes OUT.
+    const [out, src, ...headers] = args;
+    const path = require("node:path");
+    process.stdout.write(path.basename(src) + "\r\n");
+    for (const h of headers) process.stdout.write(`Note: including file: ${path.resolve(h)}\r\n`);
+    process.stdout.write("warning: kept\r\n");
+    fs.writeFileSync(out, [src, ...headers].map(read).join(""));
+    break;
+  }
+  case "multi": {
+    // Writes every output named after "--".
+    const outs = args.slice(args.indexOf("--") + 1);
+    for (const o of outs) fs.writeFileSync(o, args.slice(0, args.indexOf("--")).join(" ") + "\n");
     break;
   }
   default:

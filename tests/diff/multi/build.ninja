@@ -1,0 +1,12 @@
+rule multi
+  command = node t.js multi gen -- $out
+  restat = 1
+rule cp
+  command = node t.js cp $in $out
+rule depmismatch
+  command = node t.js write $out x && node t.js write $out.d wrong: in.txt
+  depfile = $out.d
+build a b | c: multi in.txt
+build use_c: cp c
+build use_a: cp a
+build dm: depmismatch in.txt
