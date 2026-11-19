@@ -49,6 +49,7 @@ $ node _build/js/release/build/cmd/cmd.js -C path/to/project
 | `clean_test.cc` | 19 | `clean_test.mbt` |
 | `missing_deps_test.cc` / `json_test.cc` | 7 + 4 | `missing_deps_test.mbt` |
 | `edit_distance_test.cc` | 4 | `edit_distance_test.mbt` |
+| `clparser_test.cc` / `includes_normalize_test.cc` | 8 + 6 | `clparser_test.mbt`（Windows 用例注入工作目录，在任何平台上都能运行） |
 | `elide_middle_test.cc` / `util_test.cc`（StripAnsi） | 3 + 2 | `status_test.mbt` |
 | rapidhash | 341 个哈希向量 | `rapidhash_vectors_test.mbt`（向量取自真实 ninja 写出的 `.ninja_log`） |
 
@@ -131,7 +132,6 @@ for edge in state.edges() {
 
 - `-t browse` 和 `-t msvc` 不支持（前者需要 Python，后者是已弃用的 Windows 辅助工具）。
 - `-d stats` 可以接受，但不输出统计信息；没有实现 GNU make jobserver 客户端。
-- `deps = msvc` 在 Windows 上不会把 `/showIncludes` 里的绝对路径相对化（ninja 的 `IncludesNormalize`）。
 - 清单按 UTF-8 解码，非 UTF-8 字节会被替换。
 - `-t cleandead -v` 的删除顺序，以及 "did you mean" 在多个候选距离相同时选哪一个：ninja 这两处取决于哈希表的遍历顺序，moonja 按插入顺序。
 
