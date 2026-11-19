@@ -25,6 +25,8 @@ pub(all) struct Host {
   /// Changes the working directory; an error message on failure.
   chdir : (String) -> String?
   getenv : (String) -> String?
+  /// The working directory, as getcwd() spells it.
+  cwd : () -> String
   /// Monotonic milliseconds.
   now_millis : () -> Int64
   processor_count : Int32

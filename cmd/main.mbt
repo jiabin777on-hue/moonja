@@ -368,6 +368,10 @@ extern "js" fn js_chdir(dir : String) -> String =
   #| }
 
 ///|
+extern "js" fn js_cwd() -> String =
+  #| () => process.cwd()
+
+///|
 extern "js" fn env_has(name : String) -> Bool =
   #| (name) => process.env[name] !== undefined
 
@@ -568,6 +572,7 @@ fn main {
         Some(error)
       }
     },
+    cwd: js_cwd,
     getenv: fn(name) { if env_has(name) { Some(env_get(name)) } else { None } },
     now_millis: js_now_millis,
     processor_count: js_processor_count(),

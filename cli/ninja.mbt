@@ -530,10 +530,3 @@ fn Ninja::run_build(
     done(status.code())
   })
 }
-
-///|
-/// Runs a subtool and returns its exit code.
-fn Ninja::run_tool(self : Ninja, tool : ToolInfo) -> Int32 raise Quit {
-  self.host.fatal("tool '\{tool.name}' is not implemented in moonja yet")
-  1
-}

@@ -138,6 +138,9 @@ pub(all) struct Options {
   mut phony_cycle_should_err : Bool
   /// `-d stats`; accepted, but moonja reports no metrics.
   mut stats : Bool
+  /// The argument holding the tool's name (`rules` or `-trules`): the
+  /// program name in the tool's own getopt messages.
+  mut tool_argv0 : String
   config : @moonja.BuildConfig
   /// Targets, or the tool's arguments.
   args : Array[String]
@@ -505,6 +508,7 @@ pub fn read_flags(host : Host, args : Array[String]) -> Result[Options, Int32] {
     tool: None,
     phony_cycle_should_err: false,
     stats: false,
+    tool_argv0: "",
     config,
     args: [],
   }
@@ -613,6 +617,7 @@ fn parse_args(
             arg.unsafe_get(j) == '=' {
             j += 1
           }
+          let attached = j < arg.length()
           let value = if j < arg.length() {
             arg.unsafe_substring(start=j, end=arg.length())
           } else if i < len {
@@ -629,6 +634,9 @@ fn parse_args(
             )
             usage(host, guessed)
             return ExitWith(1)
+          }
+          if c == 't' {
+            options.tool_argv0 = if attached { arg } else { value }
           }
           match apply_flag(host, options, c, value, guessed) {
             Continue => ()

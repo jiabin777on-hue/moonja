@@ -1,0 +1,58 @@
+run -t targets
+run -t targets all
+run -t targets depth 2
+run -t targets depth 0
+run -t targets rule
+run -t targets rule gen
+run -t targets bogus
+run -t rules
+run -t rules -d
+run -t rules -x
+run -t commands
+run -t commands app
+run -t commands -s app
+run -t commands -h
+run -t inputs app
+run -t inputs -d app
+run -t inputs --no-shell-escape all
+run -t inputs -0 app
+run -t multi-inputs app main.o
+run -t multi-inputs -d , app
+run -t multi-inputs --delimiter=: app
+run -t query app
+run -t query main.c
+run -t query
+run -t query nonexistent
+run -t graph app
+run -t graph
+run -t compdb
+run -t compdb cc
+run -t compdb -x link
+run -t compdb-targets app
+run -t compdb-targets
+run -t compdb-targets main.c
+run -t deps
+run -t missingdeps
+run -t urtle
+run -t wincodepage
+run -t clean -n
+run -j1
+run -t deps
+run -t deps main.o
+run -t deps other.o
+run -t query dyn.out
+run -t missingdeps
+run -t clean -n app
+run -t clean -r gen
+run -t clean -r
+run -t clean -r nosuchrule
+run -t clean nosuch
+run -j1
+run -t clean
+run -j1
+run -t clean -g
+run -j1
+run -t recompact
+run -t restat
+run -t restat app
+run -t restat -h

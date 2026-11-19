@@ -1,0 +1,33 @@
+rule cc
+  command = node t.js cc $out $out.d $in h.h
+  depfile = $out.d
+  deps = gcc
+  description = CC $out
+rule ccd
+  command = node t.js cc $out $out.d $in h.h
+  depfile = $out.d
+rule gen
+  command = node t.js cp $in $out
+  description = GEN $out
+rule link
+  command = node t.js rsp $out @$out.rsp
+  rspfile = $out.rsp
+  rspfile_content = $in
+rule stamp
+  command = node t.js write $out ok
+rule dd
+  command = node t.js dyndep $out dyn.out in.txt
+rule regen
+  command = node t.js cp build.ninja build.ninja
+  generator = 1
+build gen.h: gen in.txt
+build main.o: cc main.c || gen.h
+build other.o: ccd main.c
+build app: link main.o other.o |@ check
+build check: stamp main.o
+build dyn.dd: dd in.txt
+build dyn.out: gen in.txt || dyn.dd
+  dyndep = dyn.dd
+build all: phony app dyn.out
+build build.ninja: regen
+default all

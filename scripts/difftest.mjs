@@ -55,8 +55,18 @@ function pause(ms) {
 
 // Makes outputs comparable: the program name getopt prints, and the
 // version string of the Kitware build of ninja.
-function normalize(text) {
+function normalize(text, cwd) {
+  // -t graph names vertices by address: number them by first appearance.
+  const names = new Map();
+  const vertex = (m, addr) => {
+    if (!names.has(addr)) names.set(addr, `P${names.size + 1}`);
+    return `"${names.get(addr)}"`;
+  };
+  // -t compdb prints the working directory, which differs per copy.
+  const dirs = [cwd, cwd.replaceAll("\\", "\\\\"), cwd.replaceAll("\\", "/")];
+  for (const d of dirs) text = text.split(d).join("<DIR>");
   return text
+    .replace(/"(0x[0-9a-f]+|[0-9A-F]{16})"/g, vertex)
     .replace(/^[^\s]*?ninja(\.exe)?:/gm, "ninja:")
     .replace(/^[^\s]*?cmd\.js:/gm, "ninja:")
     .replace(/1\.13\.2\.git\.kitware\.jobserver-pipe-1/g, "1.13.2")
@@ -73,7 +83,7 @@ function run(tool, args, cwd) {
     env: { ...process.env, NINJA_STATUS: process.env.NINJA_STATUS ?? "[%f/%t] " },
   });
   if (r.error) throw r.error;
-  return { out: normalize(r.stdout), err: normalize(r.stderr), code: r.status };
+  return { out: normalize(r.stdout, cwd), err: normalize(r.stderr, cwd), code: r.status };
 }
 
 function copyDir(from, to) {

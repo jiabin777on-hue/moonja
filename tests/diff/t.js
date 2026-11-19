@@ -48,7 +48,7 @@ switch (op) {
     fs.writeFileSync(args[0], args.slice(1).join(" ") + "\n");
     break;
   case "rsp":
-    fs.writeFileSync(args[0], read(args[1]));
+    fs.writeFileSync(args[0], read(args[1].replace(/^@/, "")));
     break;
   case "dyndep": {
     const [dd, out, ...inputs] = args;

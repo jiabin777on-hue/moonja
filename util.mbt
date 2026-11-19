@@ -292,7 +292,7 @@ pub fn atoi(text : String) -> Int32 {
 ///|
 /// Orders strings by code unit, like `std::map<std::string, ...>` does for
 /// ASCII keys (`String::compare` puts shorter strings first).
-fn compare_lexical(a : String, b : String) -> Int32 {
+pub fn compare_lexical(a : String, b : String) -> Int32 {
   let n = if a.length() < b.length() { a.length() } else { b.length() }
   for i in 0..<n {
     let x = a.unsafe_get(i)
