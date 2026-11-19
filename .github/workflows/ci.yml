@@ -56,3 +56,75 @@ jobs:
       - name: Differential tests against ninja
         shell: bash
         run: node scripts/difftest.mjs --ninja "$(python -c 'import ninja, os; print(os.path.join(ninja.BIN_DIR, "ninja"))')"
+
+  # ninja's own integration tests (misc/output_test.py), run against moonja.
+  # They drive the build tool through a pseudo-terminal, which covers the
+  # smart-terminal status line the differential tests cannot see.
+  ninja-output-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - run: moon build --target js --release
+      - name: Fetch ninja 1.13.2
+        run: git clone --depth 1 --branch v1.13.2 https://github.com/ninja-build/ninja "$RUNNER_TEMP/ninja-src"
+      - name: Run misc/output_test.py with moonja as ./ninja
+        run: |
+          dir="$RUNNER_TEMP/output-test"
+          mkdir -p "$dir"
+          cp "$RUNNER_TEMP/ninja-src/misc/output_test.py" "$dir/"
+          printf '#!/bin/sh\nexec node %s "$@"\n' "$GITHUB_WORKSPACE/_build/js/release/build/cmd/cmd.js" > "$dir/ninja"
+          chmod +x "$dir/ninja"
+          cd "$dir" && python3 output_test.py -v
+
+  # A real build: ninja's own sources, configured by CMake's Ninja generator
+  # and built by moonja (gcc deps, restat, CMake re-running itself). The
+  # ninja it builds must then pass its own unit tests.
+  build-ninja-with-moonja:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - run: moon build --target js --release
+      - name: Install moonja as `moonja`
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          printf '#!/bin/sh\nexec node %s "$@"\n' "$GITHUB_WORKSPACE/_build/js/release/build/cmd/cmd.js" > "$RUNNER_TEMP/bin/moonja"
+          chmod +x "$RUNNER_TEMP/bin/moonja"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+      - name: Fetch ninja 1.13.2
+        run: git clone --depth 1 --branch v1.13.2 https://github.com/ninja-build/ninja "$RUNNER_TEMP/ninja-src"
+      - name: Configure with CMake, building with moonja
+        run: cmake -S "$RUNNER_TEMP/ninja-src" -B "$RUNNER_TEMP/build" -G Ninja -DCMAKE_MAKE_PROGRAM="$RUNNER_TEMP/bin/moonja" -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: time moonja -C "$RUNNER_TEMP/build"
+      - name: The built ninja passes its unit tests
+        run: |
+          "$RUNNER_TEMP/build/ninja_test"
+          "$RUNNER_TEMP/build/ninja" --version
+      - name: A second build does nothing
+        run: moonja -C "$RUNNER_TEMP/build" | tee out.txt && grep -q "no work to do" out.txt
+      - name: Touching a header rebuilds its users only
+        run: |
+          touch "$RUNNER_TEMP/ninja-src/src/eval_env.h"
+          moonja -C "$RUNNER_TEMP/build" -d explain | tee out.txt
+          ! grep -q "no work to do" out.txt
+          moonja -C "$RUNNER_TEMP/build" | grep -q "no work to do"
+      - name: Touching CMakeLists.txt re-runs CMake through the generator edge
+        run: |
+          touch "$RUNNER_TEMP/ninja-src/CMakeLists.txt"
+          moonja -C "$RUNNER_TEMP/build" | tee out.txt
+          grep -q "Re-running CMake" out.txt
+          moonja -C "$RUNNER_TEMP/build" | grep -q "no work to do"
