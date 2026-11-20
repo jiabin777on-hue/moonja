@@ -2,3 +2,6 @@ _build/
 target/
 .mooncakes/
 pkg.generated.mbti
+
+# Hackathon application drafts (personal details)
+moonja-*.md
