@@ -29,8 +29,36 @@ extern "js" fn setup() -> Unit =
   #|     EIO: "Input/output error", EXDEV: "Invalid cross-device link",
   #|   };
   #|   const text = (e) => posixText[e && e.code] || (e && e.message) || String(e);
+  #|   // The bytes of a string from the core library: a lone surrogate in
+  #|   // U+DC80..U+DCFF stands for the byte it escapes (see bytes_text.mbt).
+  #|   const raw = (s) => {
+  #|     if (!/[\uD800-\uDFFF]/.test(s)) return Buffer.from(s, "utf8");
+  #|     const parts = [];
+  #|     let start = 0;
+  #|     for (let i = 0; i < s.length; i++) {
+  #|       const c = s.charCodeAt(i);
+  #|       if (c >= 0xD800 && c <= 0xDBFF && i + 1 < s.length) {
+  #|         const d = s.charCodeAt(i + 1);
+  #|         if (d >= 0xDC00 && d <= 0xDFFF) { i++; continue; }
+  #|       }
+  #|       if (c >= 0xDC80 && c <= 0xDCFF) {
+  #|         parts.push(Buffer.from(s.slice(start, i), "utf8"), Buffer.from([c - 0xDC00]));
+  #|         start = i + 1;
+  #|       }
+  #|     }
+  #|     parts.push(Buffer.from(s.slice(start), "utf8"));
+  #|     return Buffer.concat(parts);
+  #|   };
+  #|   // A path for `fs`. POSIX paths are bytes. Windows ninja runs with the
+  #|   // UTF-8 code page, so its ANSI calls see U+FFFD for an invalid byte,
+  #|   // as Node does for a lone surrogate.
+  #|   const p = windows ? (s) => s : raw;
+  #|   // A path to stat. Windows ninja stats through a cache of directory
+  #|   // listings, whose names never hold the invalid byte, so such a file is
+  #|   // always missing; "?" never names a file, so `fs` says ENOENT too.
+  #|   const ps = windows ? (s) => s.replace(/(?<![\uD800-\uDBFF])[\uDC80-\uDCFF]/g, "?") : raw;
   #|   const writeRaw = (fd, s) => {
-  #|     const buf = Buffer.from(s, "utf8");
+  #|     const buf = raw(s);
   #|     let off = 0;
   #|     while (off < buf.length) {
   #|       try {
@@ -65,7 +93,7 @@ extern "js" fn setup() -> Unit =
   #|     }
   #|   };
   #|   globalThis.__moonja = {
-  #|     fs, os, path, cp, tty, windows, text, writeAll, flush,
+  #|     fs, os, path, cp, tty, windows, text, writeAll, flush, raw, p, ps,
   #|     // 0 ok, 1 missing, 2 error (message in `error`).
   #|     kind: 0, error: "",
   #|     children: new Set(), temps: new Set(), counter: 0,
@@ -87,8 +115,42 @@ extern "js" fn last_error() -> String =
   #| () => globalThis.__moonja.error
 
 ///|
-extern "js" fn argv() -> FixedArray[String] =
+extern "js" fn js_argv() -> FixedArray[String] =
   #| () => process.argv.slice(2)
+
+///|
+/// The arguments' bytes from /proc/self/cmdline, since Node decodes argv
+/// lossily; empty where that is not available or does not line up.
+extern "js" fn js_raw_argv() -> FixedArray[Bytes] =
+  #| () => {
+  #|   const m = globalThis.__moonja;
+  #|   const want = process.argv.length - 2;
+  #|   if (m.windows || want === 0) return [];
+  #|   let data;
+  #|   try { data = m.fs.readFileSync("/proc/self/cmdline"); } catch { return []; }
+  #|   const all = [];
+  #|   let start = 0;
+  #|   for (let i = 0; i < data.length; i++) {
+  #|     if (data[i] === 0) { all.push(data.subarray(start, i)); start = i + 1; }
+  #|   }
+  #|   if (all.length < want) return [];
+  #|   const args = all.slice(all.length - want).map((b) => new Uint8Array(b));
+  #|   const decoder = new TextDecoder("utf-8");
+  #|   for (let i = 0; i < want; i++) {
+  #|     if (decoder.decode(args[i]) !== process.argv[i + 2]) return [];
+  #|   }
+  #|   return args;
+  #| }
+
+///|
+fn argv() -> Array[String] {
+  let raw = js_raw_argv()
+  if raw.length() > 0 {
+    raw.iter().map(fn(b) { @moonja.decode_bytes(b) }).collect()
+  } else {
+    Array::from_fixed_array(js_argv())
+  }
+}
 
 ///|
 extern "js" fn is_windows() -> Bool =
@@ -103,7 +165,7 @@ extern "js" fn js_stat(path : String) -> Int64 =
   #|   m.kind = 0;
   #|   let st;
   #|   try {
-  #|     st = m.fs.statSync(p, { bigint: true, throwIfNoEntry: false });
+  #|     st = m.fs.statSync(m.ps(p), { bigint: true, throwIfNoEntry: false });
   #|   } catch (e) {
   #|     if (e.code === "ENOENT" || e.code === "ENOTDIR") return 0n;
   #|     m.kind = 2;
@@ -126,7 +188,7 @@ extern "js" fn js_make_dir(path : String) -> Bool =
   #| (p) => {
   #|   const m = globalThis.__moonja;
   #|   try {
-  #|     m.fs.mkdirSync(p);
+  #|     m.fs.mkdirSync(m.p(p));
   #|     return true;
   #|   } catch (e) {
   #|     return e.code === "EEXIST";
@@ -138,7 +200,7 @@ extern "js" fn js_write_file(path : String, contents : String) -> Bool =
   #| (p, s) => {
   #|   const m = globalThis.__moonja;
   #|   try {
-  #|     m.fs.writeFileSync(p, s);
+  #|     m.fs.writeFileSync(m.p(p), m.raw(s));
   #|     return true;
   #|   } catch (e) {
   #|     m.writeAll(2, `ninja: error: WriteFile(${p}): Unable to create file. ${m.text(e)}\n`);
@@ -153,7 +215,7 @@ extern "js" fn js_read_bytes(path : String) -> Bytes =
   #|   const m = globalThis.__moonja;
   #|   m.kind = 0;
   #|   try {
-  #|     return new Uint8Array(m.fs.readFileSync(p));
+  #|     return new Uint8Array(m.fs.readFileSync(m.p(p)));
   #|   } catch (e) {
   #|     m.kind = e.code === "ENOENT" ? 1 : 2;
   #|     if (m.windows) {
@@ -177,19 +239,15 @@ extern "js" fn js_read_bytes(path : String) -> Bytes =
   #| }
 
 ///|
-extern "js" fn decode_utf8(bytes : Bytes) -> String =
-  #| (b) => new TextDecoder("utf-8").decode(b)
-
-///|
 /// 0 removed, 1 missing, -1 error (reported like ninja's `RemoveFile`).
 extern "js" fn js_remove_file(path : String) -> Int32 =
   #| (p) => {
   #|   const m = globalThis.__moonja;
   #|   try {
-  #|     const st = m.fs.lstatSync(p, { throwIfNoEntry: false });
+  #|     const st = m.fs.lstatSync(m.p(p), { throwIfNoEntry: false });
   #|     if (st === undefined) return 1;
-  #|     if (st.isDirectory()) m.fs.rmdirSync(p);
-  #|     else m.fs.unlinkSync(p);
+  #|     if (st.isDirectory()) m.fs.rmdirSync(m.p(p));
+  #|     else m.fs.unlinkSync(m.p(p));
   #|     return 0;
   #|   } catch (e) {
   #|     if (e.code === "ENOENT") return 1;
@@ -203,7 +261,7 @@ extern "js" fn js_append_bytes(path : String, bytes : Bytes) -> Bool =
   #| (p, b) => {
   #|   const m = globalThis.__moonja;
   #|   try {
-  #|     m.fs.appendFileSync(p, b);
+  #|     m.fs.appendFileSync(m.p(p), b);
   #|     return true;
   #|   } catch (e) {
   #|     m.error = `${p}: ${m.text(e)}`;
@@ -216,7 +274,7 @@ extern "js" fn js_rename(from : String, to : String) -> Bool =
   #| (a, b) => {
   #|   const m = globalThis.__moonja;
   #|   try {
-  #|     m.fs.renameSync(a, b);
+  #|     m.fs.renameSync(m.p(a), m.p(b));
   #|     return true;
   #|   } catch (e) {
   #|     m.error = m.text(e);
@@ -229,7 +287,7 @@ extern "js" fn js_truncate(path : String, size : Int32) -> Bool =
   #| (p, n) => {
   #|   const m = globalThis.__moonja;
   #|   try {
-  #|     m.fs.truncateSync(p, n);
+  #|     m.fs.truncateSync(m.p(p), n);
   #|     return true;
   #|   } catch (e) {
   #|     m.error = m.text(e);
@@ -326,8 +384,17 @@ extern "js" fn js_spawn(
   #|           { stdio, argv0: raw, windowsVerbatimArguments: true, windowsHide: true });
   #|       }
   #|     } else {
-  #|       child = m.cp.spawn("/bin/sh", ["-c", command],
-  #|         { stdio, detached: !useConsole });
+  #|       // Node encodes arguments as UTF-8, so a command with escaped bytes
+  #|       // goes through as ASCII for printf's %b, which restores the
+  #|       // bytes; `set --` keeps $1 unset, as with plain `sh -c`.
+  #|       const bytes = m.raw(command);
+  #|       const args = bytes.equals(Buffer.from(command, "utf8"))
+  #|         ? ["-c", command]
+  #|         : ["-c", 'eval "set --; $(printf "%b" "$1")"', "/bin/sh",
+  #|             Array.from(bytes, (b) => b === 0x5c ? "\\\\"
+  #|               : b < 0x20 || b >= 0x7f ? "\\0" + b.toString(8).padStart(3, "0")
+  #|               : String.fromCharCode(b)).join("")];
+  #|       child = m.cp.spawn("/bin/sh", args, { stdio, detached: !useConsole });
   #|     }
   #|   } catch (e) {
   #|     if (fd >= 0) m.fs.closeSync(fd);
@@ -463,7 +530,7 @@ impl @moonja.Disk for NodeDisk with fn write_file(_self, path, contents) {
 impl @moonja.Disk for NodeDisk with fn read_file(_self, path) {
   let bytes = js_read_bytes(path)
   match last_kind() {
-    0 => Some(decode_utf8(bytes))
+    0 => Some(@moonja.decode_bytes(bytes))
     1 => None
     _ => raise @moonja.NinjaError::Error(last_error())
   }
@@ -510,7 +577,7 @@ impl @moonja.Disk for NodeDisk with fn truncate_file(_self, path, size) {
 impl @moonja.FileReader for NodeDisk with fn read_file(_self, path) {
   let bytes = js_read_bytes(path)
   match last_kind() {
-    0 => decode_utf8(bytes)
+    0 => @moonja.decode_bytes(bytes)
     _ => raise @moonja.NinjaError::Error(last_error())
   }
 }
@@ -564,7 +631,7 @@ impl @cli.Processes for NodeProcesses with fn spawn(
   on_exit,
 ) {
   let error = js_spawn(command, use_console, fn(code, output) {
-    on_exit(code, decode_utf8(output))
+    on_exit(code, @moonja.decode_bytes(output))
   })
   if error == "" {
     None
@@ -609,5 +676,5 @@ fn main {
     on_interrupt: js_on_interrupt,
     exit: js_exit,
   }
-  @cli.run(host, Array::from_fixed_array(argv()))
+  @cli.run(host, argv())
 }
