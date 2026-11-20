@@ -158,7 +158,7 @@ ninja 把路径、命令和日志都当作字节串处理，从不解码。比�
 - **Node 宿主（Windows）**：ninja 以 UTF-8 代码页运行。命令和文件操作看到的是 U+FFFD，构建时的 stat 则永远找不到这类文件，moonja 照此处理。
 - **差分测试**：`tests/diff/nonutf8`（POSIX）和 `tests/diff/nonutf8-win`（Windows）与真实 ninja 逐字节比较输出、文件树和 `.ninja_log`。
 
-目前仍按 UTF-8 解码的地方：环境变量，以及 Node 返回的当前工作目录。
+目前仍按 UTF-8 解码的地方：环境变量，以及 Node 返回的当前工作目录。另外 Node 的 `process.chdir` 只接受字符串，所以 `-C` 无法进入名字含非 UTF-8 字节的目录。
 
 ## 路线图
 
