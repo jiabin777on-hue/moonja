@@ -1,0 +1,17 @@
+# Latin-1 names (é is e-acute, ï i-diaeresis): ninja keeps the bytes
+# in paths, commands, the depfile, .ninja_log and .ninja_deps.
+rule gen
+  command = printf 'source\n' > $out
+  description = GEN $out
+rule cc
+  command = cat $in > $out && printf '%s: %s naïve.h\n' $out $in > $out.d
+  depfile = $out.d
+  deps = gcc
+rule cp
+  command = cp $in $out
+build café.c: gen
+build naïve.h: gen
+build café.o: cc café.c || naïve.h
+build out/résumé.txt: cp café.o
+build all: phony out/résumé.txt
+default all

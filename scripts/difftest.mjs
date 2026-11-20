@@ -15,6 +15,10 @@
 //   sleep MS           pause
 //   # comment
 //
+// Arguments and file names may spell bytes as \xHH (POSIX only), and a
+// file named `platform` holding "posix" or "win32" limits a case to it.
+// Outputs, files and logs are compared as bytes.
+//
 // Commands in the manifests run `node t.js ...` (tests/diff/t.js is copied
 // into every case), so one manifest works with /bin/sh and CreateProcess.
 
@@ -75,15 +79,43 @@ function normalize(text, cwd) {
     .replace(/(mtime|stored mtime) (-?\d+)/g, "$1 T");
 }
 
+// Outputs, files and logs are compared byte for byte: each byte is one
+// char ("latin1"), and turned back into UTF-8 only to print a difference.
+const bin = (buf) => buf.toString("latin1");
+const show = (s) => Buffer.from(s, "latin1").toString("utf8");
+
+// A step argument may spell bytes as \xHH, for names that are not UTF-8.
+const hasBytes = (s) => /\\x[0-9a-fA-F]{2}/.test(s);
+function argBytes(s) {
+  const parts = s.split(/(\\x[0-9a-fA-F]{2})/);
+  return Buffer.concat(parts.map((p) => (/^\\x/.test(p) ? Buffer.from([parseInt(p.slice(2), 16)]) : Buffer.from(p))));
+}
+// A path under dir; a Buffer on POSIX when it holds bytes.
+function stepPath(dir, s) {
+  if (!hasBytes(s)) return path.join(dir, s);
+  if (process.platform === "win32") throw new Error(`byte paths need POSIX: ${s}`);
+  return Buffer.concat([Buffer.from(dir + path.sep), argBytes(s)]);
+}
+
 function run(tool, args, cwd) {
   const words = splitWords(tool);
-  const r = spawnSync(words[0], [...words.slice(1), ...args], {
+  const options = {
     cwd,
-    encoding: "utf8",
     env: { ...process.env, NINJA_STATUS: process.env.NINJA_STATUS ?? "[%f/%t] " },
-  });
+  };
+  let r;
+  if (args.some(hasBytes)) {
+    // Node passes arguments as UTF-8, so the shell builds the bytes.
+    const quote = (s) => `'${s.replaceAll("'", "'\\''")}'`;
+    const octal = (s) => [...argBytes(s)].map((b) => `\\0${b.toString(8).padStart(3, "0")}`).join("");
+    const script = [...words.map(quote), ...args.map((a) => `"$(printf '%b' '${octal(a)}')"`)].join(" ");
+    r = spawnSync("/bin/sh", ["-c", script], options);
+  } else {
+    r = spawnSync(words[0], [...words.slice(1), ...args], options);
+  }
   if (r.error) throw r.error;
-  return { out: normalize(r.stdout, cwd), err: normalize(r.stderr, cwd), code: r.status };
+  const dir = bin(Buffer.from(cwd));
+  return { out: normalize(bin(r.stdout), dir), err: normalize(bin(r.stderr), dir), code: r.status };
 }
 
 function copyDir(from, to) {
@@ -94,18 +126,23 @@ function copyDir(from, to) {
 // Every file under dir (but the logs), with its contents.
 function snapshot(dir) {
   const files = {};
+  // Names are read as bytes too: on POSIX they need not be UTF-8.
   const walk = (d, rel) => {
-    for (const e of fs.readdirSync(d, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
-      const r = rel ? `${rel}/${e.name}` : e.name;
+    const entries = fs.readdirSync(d, { withFileTypes: true, encoding: "buffer" })
+      .map((e) => ({ e, name: bin(e.name) }))
+      .sort((a, b) => (a.name < b.name ? -1 : 1));
+    for (const { e, name } of entries) {
+      const r = rel ? `${rel}/${name}` : name;
+      const p = Buffer.concat([d, Buffer.from(path.sep), e.name]);
       if (e.isDirectory()) {
         files[r + "/"] = "";
-        walk(path.join(d, e.name), r);
-      } else if (e.name !== ".ninja_log" && e.name !== ".ninja_deps" && e.name !== "steps.txt") {
-        files[r] = fs.readFileSync(path.join(d, e.name), "utf8");
+        walk(p, r);
+      } else if (name !== ".ninja_log" && name !== ".ninja_deps" && name !== "steps.txt") {
+        files[r] = bin(fs.readFileSync(p));
       }
     }
   };
-  walk(dir, "");
+  walk(Buffer.from(dir), "");
   return files;
 }
 
@@ -118,7 +155,7 @@ function logEntries(dir) {
       const p = path.join(d, e.name);
       if (e.isDirectory()) walk(p);
       else if (e.name === ".ninja_log") {
-        const lines = fs.readFileSync(p, "utf8").split("\n");
+        const lines = bin(fs.readFileSync(p)).split("\n");
         found.push(lines[0]);
         for (const line of lines.slice(1)) {
           const f = line.split("\t");
@@ -139,8 +176,8 @@ function diffText(name, a, b) {
   for (let i = 0; i < Math.max(al.length, bl.length); i++) {
     if (al[i] !== bl[i]) {
       lines.push(`    line ${i + 1}`);
-      lines.push(`      ninja : ${JSON.stringify(al[i])}`);
-      lines.push(`      moonja: ${JSON.stringify(bl[i])}`);
+      lines.push(`      ninja : ${JSON.stringify(show(al[i] ?? ""))}`);
+      lines.push(`      moonja: ${JSON.stringify(show(bl[i] ?? ""))}`);
       if (lines.length > 30) break;
     }
   }
@@ -174,7 +211,7 @@ function runCase(name, opts) {
       if (a.code !== b.code) problems.push(`${where}\n  exit code: ninja ${a.code}, moonja ${b.code}`);
     } else {
       for (const who of ["ninja", "moonja"]) {
-        const target = rest[0] === undefined ? null : path.join(dirs[who], rest[0]);
+        const target = rest[0] === undefined ? null : stepPath(dirs[who], rest[0]);
         if (op === "touch") {
           pause(20);
           const now = new Date();
@@ -182,7 +219,7 @@ function runCase(name, opts) {
           fs.utimesSync(target, now, now);
         } else if (op === "write") {
           pause(20);
-          fs.mkdirSync(path.dirname(target), { recursive: true });
+          if (typeof target === "string") fs.mkdirSync(path.dirname(target), { recursive: true });
           fs.writeFileSync(target, rest.slice(1).join(" ") + "\n");
         } else if (op === "rm") {
           fs.rmSync(target, { force: true, recursive: true });
@@ -200,9 +237,9 @@ function runCase(name, opts) {
   for (const f of new Set([...Object.keys(files.ninja), ...Object.keys(files.moonja)])) {
     const a = files.ninja[f];
     const b = files.moonja[f];
-    if (a === undefined) fileProblems.push(`    only moonja has ${f}`);
-    else if (b === undefined) fileProblems.push(`    only ninja has ${f}`);
-    else if (a !== b) fileProblems.push(`    ${f}: ninja ${JSON.stringify(a)}, moonja ${JSON.stringify(b)}`);
+    if (a === undefined) fileProblems.push(`    only moonja has ${show(f)}`);
+    else if (b === undefined) fileProblems.push(`    only ninja has ${show(f)}`);
+    else if (a !== b) fileProblems.push(`    ${show(f)}: ninja ${JSON.stringify(show(a))}, moonja ${JSON.stringify(show(b))}`);
   }
   if (fileProblems.length > 0) problems.push(`after all steps\n  files differ:\n${fileProblems.join("\n")}`);
   const d2 = diffText(".ninja_log entries", logEntries(dirs.ninja), logEntries(dirs.moonja));
@@ -216,8 +253,19 @@ const names = opts.cases.length > 0
   ? opts.cases
   : fs.readdirSync(casesDir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
 let failed = 0;
+let skipped = 0;
 let totalRuns = 0;
 for (const name of names) {
+  // A case may name the one platform it is for: "posix" or "win32".
+  const only = path.join(casesDir, name, "platform");
+  if (fs.existsSync(only)) {
+    const want = fs.readFileSync(only, "utf8").trim();
+    if (want !== (process.platform === "win32" ? "win32" : "posix")) {
+      skipped++;
+      console.log(`skip ${name} (${want} only)`);
+      continue;
+    }
+  }
   const { runs, problems, work } = runCase(name, opts);
   totalRuns += runs;
   if (problems.length === 0) {
@@ -229,5 +277,6 @@ for (const name of names) {
     if (opts.keep) console.log(`  kept in ${work}`);
   }
 }
-console.log(`\n${names.length - failed}/${names.length} cases identical, ${totalRuns} runs compared`);
+const ran = names.length - skipped;
+console.log(`\n${ran - failed}/${ran} cases identical, ${totalRuns} runs compared`);
 process.exit(failed === 0 ? 0 : 1);

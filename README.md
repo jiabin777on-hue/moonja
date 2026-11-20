@@ -65,14 +65,14 @@ $ node _build/js/release/build/cmd/cmd.js -C path/to/project
 - 全部步骤结束后的整个文件树内容；
 - `.ninja_log` 中每条记录的输出路径和命令哈希。
 
-目前有 16 个用例、162 次运行：基本构建与增量、失败与 `-k`、depfile/deps 日志、restat、清单自重建、phony/order-only/validation、rspfile、dyndep、作用域与转义、25 种错误信息、pool 与 console、`-C`，以及全部子工具在构建前后的输出。CI 在 Linux（ubuntu-latest）和 Windows（windows-latest）上，以 `pip install ninja==1.13.2` 作为参照运行全部用例，两个平台都逐字节一致。
+目前有 18 个用例：基本构建与增量、失败与 `-k`、depfile/deps 日志、restat、清单自重建、phony/order-only/validation、rspfile、dyndep、作用域与转义、25 种错误信息、pool 与 console、`-C`、全部子工具在构建前后的输出，以及非 UTF-8 路径（`nonutf8` 只在 POSIX 上运行，`nonutf8-win` 只在 Windows 上运行）。每个平台运行 17 个用例。所有输出、文件名、文件内容和日志都按字节比较。CI 在 Linux（ubuntu-latest）和 Windows（windows-latest）上，以 `pip install ninja==1.13.2` 作为参照运行全部用例，两个平台都逐字节一致。
 
 ```console
 $ moon build --target js
 $ node scripts/difftest.mjs --ninja "$(which ninja)"
 ok   basic (7 runs)
 ...
-16/16 cases identical, 162 runs compared
+17/17 cases identical, 168 runs compared
 ```
 
 差分测试找到并修复了不少单元测试没有覆盖到的问题，例如：
@@ -149,11 +149,26 @@ for edge in state.edges() {
 }
 ```
 
+## 非 UTF-8 路径
+
+ninja 把路径、命令和日志都当作字节串处理，从不解码。比如 Latin-1 编码的清单里有 `build caf\xE9.o: cc caf\xE9.c`，ninja 会直接按这些字节 `stat`、执行命令，并写入 `.ninja_log`。moonja 用 MoonBit 字符串（UTF-16）保存这些值，所以读入时把每个不属于合法 UTF-8 的字节 `b` 存成孤立的代理码点 `U+DC00 + b`（范围 U+DC80–U+DCFF，即 Python 的 surrogateescape），写出时再还原成原字节（见 `bytes_text.mbt`）。合法 UTF-8 解码后不会出现孤立代理码点，小于 0x80 的字节也总是合法的，所以这个映射是一一对应的：任意字节串都满足 `encode_bytes(decode_bytes(b)) == b`，合法 UTF-8 的处理结果也和以前一样。
+
+- **核心库**：清单、depfile、`.ninja_log`、`.ninja_deps` 的读写和命令哈希都使用这对函数。`bytes_text_test.mbt` 对全部单字节、全部以非 ASCII 字节开头的双字节组合，以及各种非法序列做往返测试，并检查上面这个清单的路径、命令、哈希和两种日志。
+- **Node 宿主（POSIX）**：`fs` 收到的路径是 Buffer。Node 会把子进程参数强制转成 UTF-8，所以含转义字节的命令会先转成 ASCII 八进制转义，再由 `/bin/sh` 里的 `printf %b` 还原后用 `eval` 执行。命令行参数在 Linux 上从 `/proc/self/cmdline` 读取原始字节。
+- **Node 宿主（Windows）**：ninja 以 UTF-8 代码页运行。命令和文件操作看到的是 U+FFFD，构建时的 stat 则永远找不到这类文件，moonja 照此处理。
+- **差分测试**：`tests/diff/nonutf8`（POSIX）和 `tests/diff/nonutf8-win`（Windows）与真实 ninja 逐字节比较输出、文件树和 `.ninja_log`。
+
+目前仍按 UTF-8 解码的地方：环境变量，以及 Node 返回的当前工作目录。
+
+## 路线图
+
+- `-d stats` 输出统计信息。
+- POSIX 上的 GNU make jobserver 客户端（`--jobserver-auth=fifo:`）。
+
 ## 与 ninja 的已知差异
 
 - `-t browse` 和 `-t msvc` 不支持（前者需要 Python，后者是已弃用的 Windows 辅助工具）。
-- `-d stats` 可以接受，但不输出统计信息；没有实现 GNU make jobserver 客户端。
-- 清单按 UTF-8 解码，非 UTF-8 字节会被替换。
+- `-d stats` 可以接受，但还不输出统计信息；GNU make jobserver 客户端还没有实现。这两项在路线图里（见下文）。
 - `-t cleandead -v` 的删除顺序，以及 "did you mean" 在多个候选距离相同时选哪一个：ninja 这两处取决于哈希表的遍历顺序，moonja 按插入顺序。
 
 ## 许可证与来源

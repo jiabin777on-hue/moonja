@@ -1,0 +1,7 @@
+# A Latin-1 name (é is e-acute). Windows ninja runs with the UTF-8 code
+# page: the command sees U+FFFD, the file APIs find no such file.
+rule w
+  command = cmd /c echo hi> $out
+build café.txt: w
+build all: phony café.txt
+default all

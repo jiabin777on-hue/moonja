@@ -1,0 +1,6 @@
+run -j1
+run -j1
+run -t targets all
+run -t commands all
+run -t clean
+run -j1

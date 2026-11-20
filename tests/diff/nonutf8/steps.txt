@@ -1,0 +1,13 @@
+run -j1
+run -j1
+touch na\xEFve.h
+run -j1 -d explain
+run -t deps
+run -t query caf\xE9.o
+run -t targets all
+run -t commands all
+run -t compdb
+rm caf\xE9.o
+run -j1 caf\xE9.o
+run -t clean
+run -j1
