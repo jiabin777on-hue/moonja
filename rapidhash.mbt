@@ -163,7 +163,7 @@ pub fn rapidhash(key : Bytes) -> UInt64 {
 
 ///|
 /// ninja's `BuildLog::LogEntry::HashCommand`: rapidhash of the command's
-/// UTF-8 bytes.
+/// bytes (`encode_bytes`).
 pub fn hash_command(command : String) -> UInt64 {
-  rapidhash(@utf8.encode(command))
+  rapidhash(encode_bytes(command))
 }

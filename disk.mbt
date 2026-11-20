@@ -2,7 +2,8 @@
 /// The file system as ninja uses it: ninja's `DiskInterface`, plus the
 /// append, rename and truncate operations its logs perform with stdio.
 /// Modification times are integers whose unit the host chooses; 0 means
-/// "missing". Text is UTF-8.
+/// "missing". Text is UTF-8, with invalid bytes kept as escapes (see
+/// `decode_bytes`).
 pub(open) trait Disk {
   /// The mtime of `path`, 0 if it does not exist.
   fn stat(Self, String) -> Int64 raise NinjaError
@@ -25,13 +26,13 @@ pub(open) trait Disk {
 }
 
 ///|
-/// Appends UTF-8 text.
+/// Appends text as bytes (`encode_bytes`).
 pub fn[D : Disk] append_text(
   disk : D,
   path : String,
   text : String,
 ) -> Unit raise NinjaError {
-  disk.append_bytes(path, @utf8.encode(text))
+  disk.append_bytes(path, encode_bytes(text))
 }
 
 ///|
@@ -143,7 +144,7 @@ pub fn MemoryDisk::create(
   path : String,
   contents : String,
 ) -> Unit {
-  self.create_bytes(path, @utf8.encode(contents))
+  self.create_bytes(path, encode_bytes(contents))
 }
 
 ///|
@@ -176,7 +177,7 @@ pub fn MemoryDisk::set_mtime(
 
 ///|
 pub fn MemoryDisk::contents(self : MemoryDisk, path : String) -> String? {
-  self.files.get(path).map(fn(file) { @utf8.decode_lossy(file.contents()) })
+  self.files.get(path).map(fn(file) { decode_bytes(file.contents()) })
 }
 
 ///|
@@ -237,7 +238,7 @@ pub impl Disk for MemoryDisk with fn write_file(self, path, contents) {
 ///|
 pub impl Disk for MemoryDisk with fn read_file(self, path) {
   self.files_read.push(path)
-  self.files.get(path).map(fn(file) { @utf8.decode_lossy(file.contents()) })
+  self.files.get(path).map(fn(file) { decode_bytes(file.contents()) })
 }
 
 ///|
@@ -297,7 +298,7 @@ pub impl Disk for MemoryDisk with fn truncate_file(self, path, size) {
 pub impl FileReader for MemoryDisk with fn read_file(self, path) {
   self.files_read.push(path)
   match self.files.get(path) {
-    Some(file) => @utf8.decode_lossy(file.contents())
+    Some(file) => decode_bytes(file.contents())
     None => raise Error("No such file or directory")
   }
 }

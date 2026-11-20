@@ -144,7 +144,7 @@ fn[D : Disk] DepsLog::record_id(
   disk : D,
   node : Node,
 ) -> Unit raise NinjaError {
-  let path = @utf8.encode(node.path)
+  let path = encode_bytes(node.path)
   let path_size = path.length()
   let padding = (4 - path_size % 4) % 4
   let size = path_size + padding + 4
@@ -357,7 +357,7 @@ pub fn[D : Disk] DepsLog::load(
           path_size -= 1
         }
       }
-      let subpath = @utf8.decode_lossy(data[record:record + path_size])
+      let subpath = decode_bytes(data[record:record + path_size])
       // slash_bits do not matter here: the node is either in the manifest
       // already or an implicit dependency that never reaches a command.
       let node = state.get_node(subpath, 0)
