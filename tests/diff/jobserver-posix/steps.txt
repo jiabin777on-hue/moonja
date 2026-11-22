@@ -1,0 +1,7 @@
+# A Win32 semaphore name cannot be used on POSIX.
+env MAKEFLAGS --jobserver-auth=semaphore_name
+run
+run --quiet
+env MAKEFLAGS
+run -t clean
+run

@@ -24,7 +24,7 @@ $ node _build/js/release/build/cmd/cmd.js -C path/to/project
 - **清单语言**：变量与作用域、`rule`/`build`/`pool`/`default`、`include`/`subninja`、`$` 转义、`ninja_required_version`、phony、隐式与 order-only 依赖、隐式输出、validation（`|@`）。
 - **增量构建**：mtime 比较、命令哈希（rapidhash，与 ninja 的 `.ninja_log` v7 互通）、`restat`、`generator`、清单自重建（最多 100 轮）。
 - **依赖发现**：`depfile`、`deps = gcc` / `deps = msvc` 写入 `.ninja_deps` v4 二进制日志、dyndep 文件。
-- **调度**：`-j` 并行、`-k` 容错、`-l` 负载限制、pool 与 console pool、关键路径优先。
+- **调度**：`-j` 并行、`-k` 容错、`-l` 负载限制、pool 与 console pool、关键路径优先；POSIX 上作为 GNU make jobserver 客户端（`MAKEFLAGS` 中的 `--jobserver-auth=fifo:PATH`），按令牌池限制并发。
 - **输出**：`$NINJA_STATUS` 全部占位符（含 ETA 预测）、智能终端单行刷新与中间省略、失败报告、颜色剥离、`-v`、`--quiet`、`-d explain`。
 - **命令行**：`-C -f -j -k -l -n -v -d -t -w --version --quiet`。参数解析模拟 glibc `getopt_long`（Linux）和 ninja 自带的 getopt（Windows），报错文本也一致。
 - **子工具**：`clean`（`-g` `-r`）、`cleandead`、`commands`、`inputs`、`multi-inputs`、`deps`、`missingdeps`、`graph`、`query`、`targets`、`compdb`（`-x`）、`compdb-targets`、`recompact`、`restat`、`rules`、`urtle`、`wincodepage`。
@@ -51,6 +51,7 @@ $ node _build/js/release/build/cmd/cmd.js -C path/to/project
 | `clean_test.cc` | 19 | `clean_test.mbt` |
 | `missing_deps_test.cc` / `json_test.cc` | 7 + 4 | `missing_deps_test.mbt` |
 | `edit_distance_test.cc` | 4 | `edit_distance_test.mbt` |
+| `jobserver_test.cc` | 6 | `jobserver_test.mbt`（FIFO 换成内存池；真实 FIFO 由下文的集成测试覆盖） |
 | `clparser_test.cc` / `includes_normalize_test.cc` | 8 + 6 | `clparser_test.mbt`（Windows 用例注入工作目录，在任何平台上都能运行） |
 | `elide_middle_test.cc` / `util_test.cc`（StripAnsi） | 3 + 2 | `status_test.mbt` |
 | rapidhash | 341 个哈希向量 | `rapidhash_vectors_test.mbt`（向量取自真实 ninja 写出的 `.ninja_log`） |
@@ -65,7 +66,7 @@ $ node _build/js/release/build/cmd/cmd.js -C path/to/project
 - 全部步骤结束后的整个文件树内容；
 - `.ninja_log` 中每条记录的输出路径和命令哈希。
 
-目前有 20 个用例：基本构建与增量、失败与 `-k`、depfile/deps 日志、restat、清单自重建、phony/order-only/validation、rspfile、dyndep、作用域与转义、25 种错误信息、pool 与 console、`-C`、全部子工具在构建前后的输出、`-d stats`、由 ninja 内部哈希表决定的顺序（`did you mean` 打平时的选择、日志压缩后 `-t cleandead` 的删除顺序），以及非 UTF-8 路径（`nonutf8` 只在 POSIX 上运行，`nonutf8-win` 只在 Windows 上运行）。每个平台运行 19 个用例。所有输出、文件名、文件内容和日志都按字节比较。CI 在 Linux（ubuntu-latest）和 Windows（windows-latest）上，以 `pip install ninja==1.13.2` 作为参照运行全部用例，两个平台都逐字节一致。
+目前有 22 个用例：基本构建与增量、失败与 `-k`、depfile/deps 日志、restat、清单自重建、phony/order-only/validation、rspfile、dyndep、作用域与转义、25 种错误信息、pool 与 console、`-C`、全部子工具在构建前后的输出、`-d stats`、由 ninja 内部哈希表决定的顺序（`did you mean` 打平时的选择、日志压缩后 `-t cleandead` 的删除顺序）、`MAKEFLAGS` 中各种 jobserver 设置的提示与报错（`jobserver-posix` 只在 POSIX 上运行），以及非 UTF-8 路径（`nonutf8` 只在 POSIX 上运行，`nonutf8-win` 只在 Windows 上运行）。Linux 运行其中 21 个，Windows 运行 20 个。所有输出、文件名、文件内容和日志都按字节比较。CI 在 Linux（ubuntu-latest）和 Windows（windows-latest）上，以 `pip install ninja==1.13.2` 作为参照运行全部用例，两个平台都逐字节一致。
 
 ```console
 $ moon build --target js
@@ -92,6 +93,8 @@ CI 会拉取 ninja v1.13.2 源码，把 moonja 当作 `./ninja`，运行 ninja �
 - console pool 不会死锁；
 - 收到 SIGINT/SIGHUP/SIGTERM 时退出码为 130；
 - 各种退出码的透传、dyndep 冲突报错、`-d explain` 的输出位置，以及 `inputs`/`multi-inputs`/`compdb-targets` 等工具。
+
+同一个 CI 任务还运行 [`misc/jobserver_test.py`](https://github.com/ninja-build/ninja/blob/v1.13.2/misc/jobserver_test.py)：用 `misc/jobserver_pool.py` 建立真实的 FIFO 令牌池，统计同时运行的命令数，检查 4、2、1 个令牌分别把并发限制在 4、2、1，`-j1` 优先于令牌池，单核（`taskset -c 0`）下令牌池仍能让 4 个命令并行，pipe 模式的令牌池只给出警告，以及 `MAKEFLAGS` 原样传给命令。
 
 moonja 全部通过。
 
@@ -166,14 +169,10 @@ ninja 把路径、命令和日志都当作字节串处理，从不解码。比�
 
 最后一行 `path->node hash load` 的桶数来自 ninja 自带的 emhash8 哈希表（`src/third_party/emhash`，MIT 许可）：初始 4 个桶，最大负载 0.8，每次插入前超过就扩到下一个 2 的幂。moonja 按同样的规则计算，所以各平台都与 ninja 一致。
 
-## 路线图
-
-- POSIX 上的 GNU make jobserver 客户端（`--jobserver-auth=fifo:`）。
-
 ## 与 ninja 的已知差异
 
 - `-t browse` 和 `-t msvc` 不支持（前者需要 Python，后者是已弃用的 Windows 辅助工具）。
-- GNU make jobserver 客户端还没有实现（见路线图）。
+- Windows 上的 jobserver：ninja 使用 `--jobserver-auth=NAME` 指定的 Win32 信号量，Node 没有相应接口，moonja 报 `Could not initialize jobserver: Unsupported jobserver mode` 后不使用令牌池继续构建。POSIX 上的 FIFO 模式与 ninja 一致。
 
 ## 许可证与来源
 

@@ -57,7 +57,8 @@ jobs:
         shell: bash
         run: node scripts/difftest.mjs --ninja "$(python -c 'import ninja, os; print(os.path.join(ninja.BIN_DIR, "ninja"))')"
 
-  # ninja's own integration tests (misc/output_test.py), run against moonja.
+  # ninja's own integration tests (misc/output_test.py and
+  # misc/jobserver_test.py), run against moonja.
   # They drive the build tool through a pseudo-terminal, which covers the
   # smart-terminal status line the differential tests cannot see.
   ninja-output-test:
@@ -83,6 +84,16 @@ jobs:
           printf '#!/bin/sh\nexec %s %s "$@"\n' "$(command -v node)" "$GITHUB_WORKSPACE/_build/js/release/build/cmd/cmd.js" > "$dir/ninja"
           chmod +x "$dir/ninja"
           cd "$dir" && python3 output_test.py -v
+      # misc/jobserver_test.py: real FIFO pools from misc/jobserver_pool.py
+      # with 4, 2 and 1 tokens, -j overriding them, a pipe pool's warning,
+      # and MAKEFLAGS reaching the commands.
+      - name: Run misc/jobserver_test.py with moonja as ./ninja
+        run: |
+          dir="$RUNNER_TEMP/jobserver-test"
+          mkdir -p "$dir"
+          cp "$RUNNER_TEMP"/ninja-src/misc/jobserver_*.py "$dir/"
+          cp "$RUNNER_TEMP/output-test/ninja" "$dir/ninja"
+          cd "$dir" && python3 jobserver_test.py -v
 
   # A real build: ninja's own sources, configured by CMake's Ninja generator
   # and built by moonja (gcc deps, restat, CMake re-running itself). The

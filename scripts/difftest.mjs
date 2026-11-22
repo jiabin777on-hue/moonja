@@ -13,6 +13,8 @@
 //   write FILE TEXT... replace FILE's contents (after a short pause)
 //   rm FILE            delete FILE
 //   sleep MS           pause
+//   env NAME VALUE...  set an environment variable for the next runs
+//                      (`env NAME` unsets it); MAKEFLAGS starts unset
 //   # comment
 //
 // Arguments and file names may spell bytes as \xHH (POSIX only), and a
@@ -99,12 +101,15 @@ function stepPath(dir, s) {
   return Buffer.concat([Buffer.from(dir + path.sep), argBytes(s)]);
 }
 
-function run(tool, args, cwd) {
+function run(tool, args, cwd, caseEnv = {}) {
   const words = splitWords(tool);
-  const options = {
-    cwd,
-    env: { ...process.env, NINJA_STATUS: process.env.NINJA_STATUS ?? "[%f/%t] " },
-  };
+  const env = { ...process.env, NINJA_STATUS: process.env.NINJA_STATUS ?? "[%f/%t] " };
+  delete env.MAKEFLAGS;
+  for (const [k, v] of Object.entries(caseEnv)) {
+    if (v === null) delete env[k];
+    else env[k] = v;
+  }
+  const options = { cwd, env };
   let r;
   if (args.some(hasBytes)) {
     // Node passes arguments as UTF-8, so the shell builds the bytes.
@@ -195,6 +200,7 @@ function runCase(name, opts) {
   const tools = { ninja: opts.ninja, moonja: opts.moonja };
   const problems = [];
   let runs = 0;
+  const caseEnv = {};
   const steps = fs.readFileSync(path.join(caseDir, "steps.txt"), "utf8").split(/\r?\n/);
   for (const [index, raw] of steps.entries()) {
     const line = raw.trim();
@@ -204,13 +210,15 @@ function runCase(name, opts) {
     if (op === "run") {
       runs++;
       const results = {};
-      for (const who of ["ninja", "moonja"]) results[who] = run(tools[who], rest, dirs[who]);
+      for (const who of ["ninja", "moonja"]) results[who] = run(tools[who], rest, dirs[who], caseEnv);
       const a = results.ninja;
       const b = results.moonja;
       for (const d of [diffText("stdout", a.out, b.out), diffText("stderr", a.err, b.err)]) {
         if (d) problems.push(`${where}\n${d}`);
       }
       if (a.code !== b.code) problems.push(`${where}\n  exit code: ninja ${a.code}, moonja ${b.code}`);
+    } else if (op === "env") {
+      caseEnv[rest[0]] = rest.length > 1 ? rest.slice(1).join(" ") : null;
     } else {
       for (const who of ["ninja", "moonja"]) {
         const target = rest[0] === undefined ? null : stepPath(dirs[who], rest[0]);
