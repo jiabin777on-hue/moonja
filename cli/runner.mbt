@@ -5,6 +5,8 @@ priv struct ProcessRunner {
   host : Host
   config : @moonja.BuildConfig
   active : Array[@moonja.Edge]
+  /// With a jobserver, its slots limit the commands, not `-j`.
+  jobserver : @moonja.JobserverClient?
   mut aborted : Bool
   mut on_result : (@moonja.CommandResult) -> Unit
 }
@@ -13,14 +15,26 @@ priv struct ProcessRunner {
 fn ProcessRunner::new(
   host : Host,
   config : @moonja.BuildConfig,
+  jobserver? : @moonja.JobserverClient,
 ) -> ProcessRunner {
-  { host, config, active: [], aborted: false, on_result: fn(_) {  }, }
+  {
+    host,
+    config,
+    active: [],
+    jobserver,
+    aborted: false,
+    on_result: fn(_) {  },
+  }
 }
 
 ///|
 impl @moonja.CommandRunner for ProcessRunner with fn can_run_more(self) {
   let mut capacity = self.config.parallelism.to_int64() -
     self.active.length().to_int64()
+  if self.jobserver is Some(_) {
+    // Plan::find_work limits the commands by acquiring slots.
+    capacity = int_max.to_int64()
+  }
   if self.config.max_load_average > 0.0 {
     // Truncated toward zero, like ninja's int conversion.
     let load_capacity = (self.config.max_load_average -
@@ -80,6 +94,12 @@ impl @moonja.CommandRunner for ProcessRunner with fn active_edges(self) {
 
 ///|
 impl @moonja.CommandRunner for ProcessRunner with fn abort(self) {
+  // Give the running commands' slots back (ninja's ClearJobTokens).
+  if self.jobserver is Some(jobserver) {
+    for edge in self.active {
+      jobserver.release_edge(edge)
+    }
+  }
   self.aborted = true
   self.host.processes.kill_all()
   self.active.clear()

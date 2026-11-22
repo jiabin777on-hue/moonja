@@ -455,6 +455,8 @@ fn apply_flag(
       } else {
         int_max
       }
+      // An explicit job count overrides a jobserver.
+      config.disable_jobserver_client = true
     }
     'k' => {
       let (n, whole) = strtol(value)
@@ -472,7 +474,10 @@ fn apply_flag(
         Some(load) => config.max_load_average = load
         None => host.fatal("-l parameter not numeric: did you mean -l 0.0?")
       }
-    'n' => config.dry_run = true
+    'n' => {
+      config.dry_run = true
+      config.disable_jobserver_client = true
+    }
     't' =>
       match choose_tool(host, value) {
         Some(tool) => options.tool = Some(tool)

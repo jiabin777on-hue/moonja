@@ -356,7 +356,11 @@ fn Ninja::drive(
     done(status, message)
     return
   }
-  let runner = ProcessRunner::new(self.host, self.config)
+  let runner = ProcessRunner::new(
+    self.host,
+    self.config,
+    jobserver?=builder.jobserver(),
+  )
   let finish = fn(progress : @moonja.BuildProgress) raise Quit {
     match progress {
       Waiting => ()
@@ -498,6 +502,47 @@ fn Ninja::collect_targets(
 }
 
 ///|
+/// A client of the jobserver MAKEFLAGS describes, if any (ninja's
+/// `SetupJobserverClient`).
+fn Ninja::setup_jobserver_client(self : Ninja) -> @moonja.JobserverClient? {
+  // A dry run or an explicit job count does not even look at MAKEFLAGS.
+  if self.config.disable_jobserver_client {
+    return None
+  }
+  guard (self.host.getenv)("MAKEFLAGS") is Some(makeflags) else { return None }
+  let quiet = self.config.verbosity is Quiet
+  let config = @moonja.parse_native_makeflags(
+    makeflags,
+    platform=self.host.platform,
+  ) catch {
+    error => {
+      if !quiet {
+        self.warning("Ignoring jobserver: \{error.message()} [\{makeflags}]")
+      }
+      return None
+    }
+  }
+  if config.mode is NoMode {
+    return None
+  }
+  if !quiet && !(self.config.verbosity is NoStatusUpdate) {
+    @moonja.Status::info(self.status, "Jobserver mode detected: \{makeflags}")
+  }
+  let client = @moonja.create_jobserver_client(
+    config,
+    open_fifo=self.host.open_jobserver_fifo,
+  ) catch {
+    error => {
+      if !quiet {
+        self.error("Could not initialize jobserver: \{error.message()}")
+      }
+      return None
+    }
+  }
+  Some(client)
+}
+
+///|
 /// Builds the requested targets, then calls `done` with the exit code
 /// (ninja's `RunBuild`).
 fn Ninja::run_build(
@@ -511,7 +556,11 @@ fn Ninja::run_build(
       return
     }
   }
+  let jobserver = self.setup_jobserver_client()
   let builder = self.new_builder()
+  if jobserver is Some(client) {
+    builder.set_jobserver_client(client)
+  }
   for target in targets {
     builder.add_target(target) catch {
       error => {

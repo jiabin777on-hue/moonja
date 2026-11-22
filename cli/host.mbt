@@ -31,6 +31,9 @@ pub(all) struct Host {
   now_millis : () -> Int64
   /// Monotonic nanoseconds, for `-d stats`.
   now_nanos : () -> Int64
+  /// Opens a jobserver FIFO for reading and writing without blocking, or
+  /// returns ninja's error message.
+  open_jobserver_fifo : (String) -> Result[&@moonja.JobserverPool, String]
   processor_count : Int32
   /// The one-minute load average; negative if unknown.
   load_average : () -> Double

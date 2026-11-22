@@ -27,6 +27,7 @@ extern "js" fn setup() -> Unit =
   #|     EBUSY: "Device or resource busy", ENOTEMPTY: "Directory not empty",
   #|     EMFILE: "Too many open files", EINVAL: "Invalid argument",
   #|     EIO: "Input/output error", EXDEV: "Invalid cross-device link",
+  #|     ENXIO: "No such device or address", EAGAIN: "Resource temporarily unavailable",
   #|   };
   #|   const text = (e) => posixText[e && e.code] || (e && e.message) || String(e);
   #|   // The bytes of a string from the core library: a lone surrogate in
@@ -508,6 +509,89 @@ extern "js" fn js_exit(code : Int32) -> Unit =
   #| }
 
 ///|
+/// Opens a jobserver FIFO like ninja's `PosixJobserverClient::InitWithFifo`:
+/// both ends without blocking. Returns a handle, or -1 with the error set.
+extern "js" fn js_fifo_open(path : String) -> Int32 =
+  #| (p) => {
+  #|   const m = globalThis.__moonja;
+  #|   const { O_RDONLY, O_WRONLY, O_NONBLOCK } = m.fs.constants;
+  #|   let r;
+  #|   try {
+  #|     r = m.fs.openSync(m.p(p), O_RDONLY | O_NONBLOCK);
+  #|   } catch (e) {
+  #|     m.error = `Error opening fifo for reading: ${m.text(e)}`;
+  #|     return -1;
+  #|   }
+  #|   if (!m.fs.fstatSync(r).isFIFO()) {
+  #|     m.fs.closeSync(r);
+  #|     m.error = `Not a fifo path: ${p}`;
+  #|     return -1;
+  #|   }
+  #|   let w;
+  #|   try {
+  #|     w = m.fs.openSync(m.p(p), O_WRONLY | O_NONBLOCK);
+  #|   } catch (e) {
+  #|     m.fs.closeSync(r);
+  #|     m.error = `Error opening fifo for writing: ${m.text(e)}`;
+  #|     return -1;
+  #|   }
+  #|   m.fifos = m.fifos || [];
+  #|   m.fifos.push({ r, w, buf: Buffer.alloc(1) });
+  #|   return m.fifos.length - 1;
+  #| }
+
+///|
+/// One byte from the FIFO, or -1 if none is there now.
+extern "js" fn js_fifo_read(handle : Int32) -> Int32 =
+  #| (h) => {
+  #|   const f = globalThis.__moonja.fifos[h];
+  #|   try {
+  #|     return globalThis.__moonja.fs.readSync(f.r, f.buf, 0, 1, null) === 1 ? f.buf[0] : -1;
+  #|   } catch (e) {
+  #|     return -1;
+  #|   }
+  #| }
+
+///|
+/// Writes one byte back; errors are ignored, as ninja ignores them.
+extern "js" fn js_fifo_write(handle : Int32, byte : Int32) -> Unit =
+  #| (h, b) => {
+  #|   const f = globalThis.__moonja.fifos[h];
+  #|   try { globalThis.__moonja.fs.writeSync(f.w, Buffer.from([b])); } catch (e) {}
+  #| }
+
+///|
+/// A jobserver pool behind a FIFO.
+struct NodeFifo {
+  handle : Int32
+}
+
+///|
+impl @moonja.JobserverPool for NodeFifo with fn try_read(self) {
+  let byte = js_fifo_read(self.handle)
+  if byte < 0 {
+    None
+  } else {
+    Some(byte.to_byte())
+  }
+}
+
+///|
+impl @moonja.JobserverPool for NodeFifo with fn write(self, byte) {
+  js_fifo_write(self.handle, byte.to_int())
+}
+
+///|
+fn open_jobserver_fifo(path : String) -> Result[&@moonja.JobserverPool, String] {
+  let handle = js_fifo_open(path)
+  if handle < 0 {
+    Err(last_error())
+  } else {
+    Ok(NodeFifo::{ handle, })
+  }
+}
+
+///|
 /// The file system through Node's `fs`.
 struct NodeDisk {}
 
@@ -679,6 +763,7 @@ fn main {
     getenv: fn(name) { if env_has(name) { Some(env_get(name)) } else { None } },
     now_millis: js_now_millis,
     now_nanos: js_now_nanos,
+    open_jobserver_fifo,
     processor_count: js_processor_count(),
     load_average: js_load_average,
     on_interrupt: js_on_interrupt,
