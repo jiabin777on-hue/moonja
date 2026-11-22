@@ -9,5 +9,7 @@ rule loud
 build a1: slow p.in
 build a2: slow p.in
 build a3: slow p.in
-build talk: loud
+# After a3, so that the console edge does not race the pool for the
+# progress numbers.
+build talk: loud || a3
 build all: phony a1 a2 a3 talk
