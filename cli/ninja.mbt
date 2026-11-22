@@ -397,14 +397,17 @@ fn Ninja::rebuild_manifest(
     return
   }
   let builder = self.new_builder()
+  // Where ninja returns early, its Builder's destructor still cleans up.
   builder.add_target(node) catch {
     error => {
+      builder.remove_lock_file()
       done(false, error.message())
       return
     }
   }
   if builder.already_up_to_date() {
     // Not an error, but nothing was rebuilt.
+    builder.remove_lock_file()
     done(false, "")
     return
   }
@@ -513,6 +516,7 @@ fn Ninja::run_build(
     builder.add_target(target) catch {
       error => {
         self.error(error.message())
+        builder.remove_lock_file()
         done(1)
         return
       }
@@ -522,6 +526,7 @@ fn Ninja::run_build(
     if !(self.config.verbosity is NoStatusUpdate) {
       @moonja.Status::info(self.status, "no work to do.")
     }
+    builder.remove_lock_file()
     done(0)
     return
   }

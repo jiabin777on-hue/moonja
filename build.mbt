@@ -1234,6 +1234,14 @@ pub fn[R : CommandRunner] Builder::cleanup(self : Builder, runner : R) -> Unit {
       ignore(self.disk.remove_file(depfile))
     }
   }
+  self.remove_lock_file()
+}
+
+///|
+/// Removes the lock file if it exists. This is all ninja's `Cleanup` does
+/// for a builder that never set up a command runner, as when there was
+/// nothing to build; ninja's destructor always runs it.
+pub fn Builder::remove_lock_file(self : Builder) -> Unit {
   let lock = self.disk.stat(self.lock_file_path) catch { _ => 0 }
   if lock > 0 {
     ignore(self.disk.remove_file(self.lock_file_path))
