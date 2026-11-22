@@ -136,7 +136,7 @@ pub(all) struct Options {
   mut working_dir : String?
   mut tool : ToolInfo?
   mut phony_cycle_should_err : Bool
-  /// `-d stats`; accepted, but moonja reports no metrics.
+  /// `-d stats`: print metrics after the build.
   mut stats : Bool
   /// The argument holding the tool's name (`rules` or `-trules`): the
   /// program name in the tool's own getopt messages.
@@ -312,6 +312,8 @@ fn debug_enable(host : Host, name : String, options : Options) -> Bool {
     }
     "stats" => {
       options.stats = true
+      // Like ninja's `g_metrics = new Metrics`: a second `-d stats` starts over.
+      @moonja.enable_metrics(host.now_nanos)
       true
     }
     "explain" => {

@@ -118,7 +118,12 @@ fn run_cycle(
       raise Quit(1)
     } else {
       ninja.parse_previous_elapsed_times()
-      ninja.run_build(fn(code) raise Quit { raise Quit(code) })
+      ninja.run_build(fn(code) raise Quit {
+        if @moonja.metrics_enabled() {
+          host.print(ninja.state.dump_metrics())
+        }
+        raise Quit(code)
+      })
     }
   })
 }

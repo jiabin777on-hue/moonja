@@ -477,6 +477,10 @@ extern "js" fn js_now_millis() -> Int64 =
   #| () => BigInt(Math.floor(performance.now()))
 
 ///|
+extern "js" fn js_now_nanos() -> Int64 =
+  #| () => BigInt.asIntN(64, process.hrtime.bigint())
+
+///|
 extern "js" fn js_processor_count() -> Int32 =
   #| () => {
   #|   const os = globalThis.__moonja.os;
@@ -509,6 +513,9 @@ struct NodeDisk {}
 
 ///|
 impl @moonja.Disk for NodeDisk with fn stat(_self, path) {
+  // ninja measures RealDiskInterface::Stat.
+  let metric = @moonja.metric_record("node stat")
+  defer metric.stop()
   let mtime = js_stat(path)
   if mtime == -1 {
     raise @moonja.NinjaError::Error(last_error())
@@ -671,6 +678,7 @@ fn main {
     cwd: js_cwd,
     getenv: fn(name) { if env_has(name) { Some(env_get(name)) } else { None } },
     now_millis: js_now_millis,
+    now_nanos: js_now_nanos,
     processor_count: js_processor_count(),
     load_average: js_load_average,
     on_interrupt: js_on_interrupt,

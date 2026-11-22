@@ -29,6 +29,8 @@ pub(all) struct Host {
   cwd : () -> String
   /// Monotonic milliseconds.
   now_millis : () -> Int64
+  /// Monotonic nanoseconds, for `-d stats`.
+  now_nanos : () -> Int64
   processor_count : Int32
   /// The one-minute load average; negative if unknown.
   load_average : () -> Double
