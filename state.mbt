@@ -82,6 +82,7 @@ pub fn State::add_edge(self : State, rule : Rule) -> Edge {
     critical_path_weight: -1,
     command_start_time: 0,
     prev_elapsed_time_millis: -1,
+    job_slot: NoSlot,
   }
   self.edges.push(edge)
   edge

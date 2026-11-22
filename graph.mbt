@@ -290,6 +290,8 @@ pub struct Edge {
   /// How long the command took last time (from the build log), for the
   /// ETA; -1 if unknown.
   mut prev_elapsed_time_millis : Int64
+  /// The jobserver slot the edge runs in.
+  mut job_slot : JobSlot
 }
 
 ///|

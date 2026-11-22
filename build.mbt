@@ -184,6 +184,8 @@ pub(all) struct BuildConfig {
   mut keep_rsp : Bool
   /// `-d explain`.
   mut explain : Bool
+  /// Set by `-j` and `-n`: ignore a jobserver in MAKEFLAGS.
+  mut disable_jobserver_client : Bool
 }
 
 ///|
@@ -197,6 +199,7 @@ pub fn BuildConfig::default() -> BuildConfig {
     keep_depfile: false,
     keep_rsp: false,
     explain: false,
+    disable_jobserver_client: false,
   }
 }
 
@@ -231,6 +234,9 @@ pub struct Plan {
   mut status : &Status
   /// Loads a dyndep file that just became ready (the builder's job).
   mut dyndep_loader : ((Node) -> Unit raise NinjaError)?
+  /// Limits running edges to the slots it hands out (ninja reaches it
+  /// through the builder).
+  mut jobserver : JobserverClient?
 }
 
 ///|
@@ -243,6 +249,7 @@ pub fn Plan::new() -> Plan {
     command_edges: 0,
     status: NullStatus::new(),
     dyndep_loader: None,
+    jobserver: None,
   }
 }
 
@@ -340,9 +347,36 @@ fn Plan::edge_wanted(self : Plan, edge : Edge) -> Unit {
 }
 
 ///|
-/// The next edge to run, if one is ready.
+/// The next edge to run, if one is ready and, with a jobserver, a slot is
+/// free for it.
 pub fn Plan::find_work(self : Plan) -> Edge? {
+  guard self.ready.top() is Some(edge) else { return None }
+  if self.jobserver is Some(jobserver) {
+    edge.job_slot = jobserver.try_acquire()
+    if !edge.job_slot.is_valid() {
+      return None
+    }
+  }
   self.ready.pop()
+}
+
+///|
+/// Takes slots from `client` for the edges it hands out.
+pub fn Plan::set_jobserver_client(
+  self : Plan,
+  client : JobserverClient,
+) -> Unit {
+  self.jobserver = Some(client)
+}
+
+///|
+/// Gives the edge's job slot back to the jobserver, if it holds one.
+pub fn Plan::release_job_slot(self : Plan, edge : Edge) -> Unit {
+  if self.jobserver is Some(jobserver) {
+    jobserver.release(edge.job_slot)
+  }
+  // ninja moves the slot out of the edge.
+  edge.job_slot = NoSlot
 }
 
 ///|
@@ -387,6 +421,7 @@ pub fn Plan::edge_finished(
     edge.pool.edge_finished(edge)
   }
   edge.pool.retrieve_ready_edges(self.ready)
+  self.release_job_slot(edge)
   if result is EdgeFailed {
     return
   }
@@ -753,6 +788,21 @@ pub fn Builder::new(
 ///|
 pub fn Builder::plan(self : Builder) -> Plan {
   self.plan
+}
+
+///|
+/// Runs edges only in slots of a jobserver pool (ninja's
+/// `SetJobserverClient`).
+pub fn Builder::set_jobserver_client(
+  self : Builder,
+  client : JobserverClient,
+) -> Unit {
+  self.plan.set_jobserver_client(client)
+}
+
+///|
+pub fn Builder::jobserver(self : Builder) -> JobserverClient? {
+  self.plan.jobserver
 }
 
 ///|
