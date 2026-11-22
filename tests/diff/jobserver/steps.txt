@@ -1,8 +1,8 @@
 # What ninja makes of MAKEFLAGS before it builds. Real FIFO pools are
 # tested by ninja's misc/jobserver_test.py in CI.
-# Pipes are recognized but not supported: a warning, then a normal build.
-env MAKEFLAGS " -j4 --jobserver-auth=3,4"
-run
+# No pipe pools (--jobserver-auth=R,W) here: the reference ninja from pip
+# is Kitware's jobserver-pipe fork, which supports them where upstream
+# 1.13.2 only warns. misc/jobserver_test.py checks upstream's warning.
 # Negative descriptors disable the jobserver; so does `n` in the first word.
 env MAKEFLAGS --jobserver-auth=-1,4
 run -t clean
@@ -27,5 +27,5 @@ run -t clean
 run -j2
 run -n
 # The last setting wins.
-env MAKEFLAGS "--jobserver-auth=fifo:missing --jobserver-auth=3,4"
+env MAKEFLAGS "--jobserver-auth=semaphore --jobserver-auth=fifo:missing"
 run
