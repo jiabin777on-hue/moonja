@@ -1,0 +1,10 @@
+# Orders that come from ninja's hash maps (emhash8): paths are listed in
+# insertion order, and a log entry erased by recompaction is replaced by
+# the last one.
+rule cp
+  command = node t.js cp $in $out
+build kept1: cp in.txt
+build cat1: cp in.txt
+build cat2: cp in.txt
+build dog2: cp dog1
+build dog1: cp in.txt

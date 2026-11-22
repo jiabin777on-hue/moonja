@@ -1,0 +1,8 @@
+# Equally close suggestions: ninja takes the first path it created.
+run cat3
+run dog3
+# 110 log entries for 10 outputs: loading recompacts the log, dropping
+# g1, g2 and g3, which are gone. Each erase moves the last entry into the
+# hole, so the stale files are removed as d1 d2 d3 d6 d4 d5.
+run -v -t cleandead
+run -v -t cleandead

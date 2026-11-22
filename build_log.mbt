@@ -396,9 +396,7 @@ pub fn[D : Disk] BuildLog::recompact(
     }
     out.write_string(write_entry(entry))
   }
-  for output in dead {
-    self.entries.remove(output)
-  }
+  self.erase_entries(dead)
   let temp = path + ".recompact"
   if !disk.write_file(temp, out.to_string()) {
     raise Error("cannot write \{temp}")
@@ -407,6 +405,34 @@ pub fn[D : Disk] BuildLog::recompact(
     raise Error("cannot remove \{path}")
   }
   disk.rename_file(temp, path)
+}
+
+///|
+/// Removes `outputs` one by one the way ninja's emhash8 map does: the last
+/// entry moves into the hole. `-t cleandead` lists entries in this order.
+fn BuildLog::erase_entries(self : BuildLog, outputs : Array[String]) -> Unit {
+  if outputs.is_empty() {
+    return
+  }
+  let order : Array[(String, LogEntry)] = []
+  let index : Map[String, Int32] = Map([])
+  for output, entry in self.entries {
+    index[output] = order.length()
+    order.push((output, entry))
+  }
+  for output in outputs {
+    guard index.get(output) is Some(slot) else { continue }
+    index.remove(output)
+    guard order.pop() is Some(last) else { continue }
+    if slot < order.length() {
+      order[slot] = last
+      index[last.0] = slot
+    }
+  }
+  self.entries.clear()
+  for pair in order {
+    self.entries[pair.0] = pair.1
+  }
 }
 
 ///|
