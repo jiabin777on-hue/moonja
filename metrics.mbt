@@ -1,5 +1,6 @@
 // Port of ninja v1.13.2 src/metrics.{h,cc} and NinjaMain::DumpMetrics
-// (Apache-2.0, see NOTICE): the `-d stats` report.
+// (Apache-2.0), with the growth policy of the emhash8 map ninja vendors
+// (MIT; see NOTICE): the `-d stats` report.
 
 ///|
 /// One measured code path (ninja's `Metric`).
@@ -146,41 +147,35 @@ pub fn metrics_report() -> String {
 }
 
 ///|
-/// The number of buckets ninja's `std::unordered_map` of paths has after
-/// `entries` insertions. Windows ninja is built with the MSVC STL: 8
-/// buckets, then whenever an insertion would push the load factor over
-/// 1.0, 8 times as many while under 512, else the next power of two.
-/// Elsewhere it is libstdc++ (libc++ on macOS), whose prime bucket counts
-/// moonja does not model: None.
-pub fn path_map_buckets(entries : Int32, platform~ : Platform) -> Int32? {
-  guard platform is Windows else { return None }
-  let mut buckets = 8
-  for size in 1..<=entries {
-    // MSVC compares float(size) / float(buckets) with the float load factor.
-    if Float::from_int(size) / Float::from_int(buckets) > 1.0 {
-      buckets = if buckets < 512 && buckets * 8 >= size {
-        buckets * 8
-      } else {
-        let mut pow = 1
-        while pow < size {
-          pow *= 2
-        }
-        pow
+/// `(1 << 27) / 0.8f` truncated: emhash8's encoding of its default maximum
+/// load factor.
+const EMHASH_MLF : UInt64 = 167772160
+
+///|
+/// The number of buckets ninja's map of paths has after `entries`
+/// insertions. ninja keeps paths in an emhash8::HashMap (third_party/emhash,
+/// v1.6.5): it starts with 4 buckets, and before every insertion, once
+/// `size * mlf >> 27` reaches `buckets - 1`, grows to the smallest power of
+/// two of at least that plus 2.
+pub fn path_map_buckets(entries : Int32) -> Int32 {
+  let mut buckets = 4
+  for size in 0..<entries {
+    let required = ((size.to_uint64() * EMHASH_MLF) >> 27).to_int()
+    if required >= buckets - 1 {
+      buckets = 4
+      while buckets < required + 2 {
+        buckets *= 2
       }
     }
   }
-  Some(buckets)
+  buckets
 }
 
 ///|
 /// What `-d stats` prints after a build (ninja's `NinjaMain::DumpMetrics`).
-/// Where moonja does not know the bucket count it prints `?`.
 pub fn State::dump_metrics(self : State) -> String {
   let count = self.paths.length()
-  let hash_line = match path_map_buckets(count, platform=self.platform) {
-    Some(buckets) =>
-      "path->node hash load \{format_ratio(count.to_int64(), buckets.to_int64(), 2)} (\{count} entries / \{buckets} buckets)\n"
-    None => "path->node hash load ? (\{count} entries / ? buckets)\n"
-  }
-  metrics_report() + "\n" + hash_line
+  let buckets = path_map_buckets(count)
+  metrics_report() +
+  "\npath->node hash load \{format_ratio(count.to_int64(), buckets.to_int64(), 2)} (\{count} entries / \{buckets} buckets)\n"
 }

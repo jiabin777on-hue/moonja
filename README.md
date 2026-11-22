@@ -162,9 +162,9 @@ ninja 把路径、命令和日志都当作字节串处理，从不解码。比�
 
 ## `-d stats`
 
-`metrics.mbt` 移植了 ninja 的 `Metrics`：ninja 源码里的 12 个 `METRIC_RECORD` 在 moonja 的对应函数里都有，名字相同，按第一次执行的顺序列出，计数规则相同（例如 `subninja`/`include` 不另计 `.ninja parse`，dyndep 文件计入；phony 边计入 `StartEdge`，不计入 `FinishCommand`）。报告在 `RunBuild` 之后打印，构建失败或目标不存在时也打印，子工具不打印。`tests/diff/stats` 与真实 ninja 逐字节比较指标名、次数和路径表条目数；两边各自的耗时不同，比较前替换掉。
+`metrics.mbt` 移植了 ninja 的 `Metrics`：ninja 源码里的 12 个 `METRIC_RECORD` 在 moonja 的对应函数里都有，名字相同，按第一次执行的顺序列出，计数规则相同（例如 `subninja`/`include` 不另计 `.ninja parse`，dyndep 文件计入；phony 边计入 `StartEdge`，不计入 `FinishCommand`）。报告在 `RunBuild` 之后打印，构建失败或目标不存在时也打印，子工具不打印。`tests/diff/stats` 与真实 ninja 逐字节比较指标名、次数和最后一行的路径表负载；两边各自的耗时不同，比较前替换掉。
 
-最后一行 `path->node hash load` 的桶数来自 C++ 标准库的 `unordered_map`。Windows 上的 ninja 用 MSVC STL 构建，moonja 按它的扩容规则（8 个桶起，负载超过 1 时不足 512 乘 8，否则取下一个 2 的幂）算出相同的桶数；其他平台的 libstdc++/libc++ 按质数表扩容，moonja 不模拟，桶数和负载打印为 `?`。
+最后一行 `path->node hash load` 的桶数来自 ninja 自带的 emhash8 哈希表（`src/third_party/emhash`，MIT 许可）：初始 4 个桶，最大负载 0.8，每次插入前超过就扩到下一个 2 的幂。moonja 按同样的规则计算，所以各平台都与 ninja 一致。
 
 ## 路线图
 
@@ -174,7 +174,6 @@ ninja 把路径、命令和日志都当作字节串处理，从不解码。比�
 
 - `-t browse` 和 `-t msvc` 不支持（前者需要 Python，后者是已弃用的 Windows 辅助工具）。
 - GNU make jobserver 客户端还没有实现（见路线图）。
-- `-d stats` 在 Windows 以外的平台不输出路径表的桶数和负载（见上文）。
 - `-t cleandead -v` 的删除顺序，以及 "did you mean" 在多个候选距离相同时选哪一个：ninja 这两处取决于哈希表的遍历顺序，moonja 按插入顺序。
 
 ## 许可证与来源
