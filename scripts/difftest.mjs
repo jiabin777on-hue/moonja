@@ -279,6 +279,13 @@ for (const name of names) {
     failed++;
     console.log(`FAIL ${name}`);
     for (const p of problems) console.log(p);
+    // On GitHub Actions, also as an annotation: those can be read without
+    // signing in, unlike the job log.
+    if (process.env.GITHUB_ACTIONS) {
+      const text = show(problems.join("\n")).slice(0, 60000);
+      const escaped = text.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A");
+      console.log(`::error title=difftest ${name}::${escaped}`);
+    }
     if (opts.keep) console.log(`  kept in ${work}`);
   }
 }
