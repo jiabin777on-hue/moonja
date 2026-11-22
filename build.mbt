@@ -595,6 +595,8 @@ fn edge_weight_heuristic(edge : Edge) -> Int64 {
 /// Weighs each edge by the longest chain of work that depends on it, so
 /// the scheduler starts the critical path first.
 fn Plan::compute_critical_path(self : Plan) -> Unit {
+  let metric = metric_record("ComputeCriticalPath")
+  defer metric.stop()
   // Topological order of the edges reachable from the targets: every edge
   // after the edges producing its inputs.
   let sorted : Array[Edge] = []
@@ -1007,6 +1009,8 @@ fn[R : CommandRunner] Builder::start_edge(
   runner : R,
   edge : Edge,
 ) -> Unit raise NinjaError {
+  let metric = metric_record("StartEdge")
+  defer metric.stop()
   if edge.is_phony() {
     return
   }
@@ -1051,6 +1055,8 @@ fn Builder::finish_command(
   self : Builder,
   result : CommandResult,
 ) -> Unit raise NinjaError {
+  let metric = metric_record("FinishCommand")
+  defer metric.stop()
   let edge = result.edge
   // Extract dependencies first: it filters the output (MSVC's
   // /showIncludes, even on failure), and its failure fails the command.

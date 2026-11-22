@@ -267,6 +267,8 @@ pub fn[D : Disk] BuildLog::load(
   disk : D,
   path : String,
 ) -> (LoadStatus, String) raise NinjaError {
+  let metric = metric_record(".ninja_log load")
+  defer metric.stop()
   guard disk.read_file(path) is Some(content) else { return (NotFound, "") }
   let mut log_version = 0
   let mut unique_entry_count = 0
@@ -381,6 +383,8 @@ pub fn[D : Disk] BuildLog::recompact(
   path : String,
   is_path_dead : (String) -> Bool,
 ) -> Unit raise NinjaError {
+  let metric = metric_record(".ninja_log recompact")
+  defer metric.stop()
   self.close(disk)
   let out = StringBuilder()
   out.write_string("\{build_log_signature}\{build_log_version}\n")
@@ -414,6 +418,8 @@ pub fn[D : Disk] BuildLog::restat(
   path : String,
   outputs : Array[String],
 ) -> Unit raise NinjaError {
+  let metric = metric_record(".ninja_log restat")
+  defer metric.stop()
   self.close(disk)
   let out = StringBuilder()
   out.write_string("\{build_log_signature}\{build_log_version}\n")

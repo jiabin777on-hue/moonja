@@ -63,6 +63,8 @@ pub fn parse_cl_output(
   deps_prefix : String,
   normalizer? : IncludesNormalize,
 ) -> ClOutput raise NinjaError {
+  let metric = metric_record("CLParser::Parse")
+  defer metric.stop()
   let includes : Map[String, Unit] = Map([])
   let filtered = StringBuilder()
   let mut seen_show_includes = false

@@ -85,6 +85,9 @@ pub fn DyndepParser::load(
   self : DyndepParser,
   filename : String,
 ) -> Unit raise NinjaError {
+  // ninja's DyndepParser inherits Parser::Load and its metric.
+  let metric = metric_record(".ninja parse")
+  defer metric.stop()
   let contents = match self.read {
     Some(read) =>
       read(filename) catch {

@@ -106,6 +106,9 @@ pub fn ManifestParser::load(
   filename : String,
   parent? : Lexer,
 ) -> Unit raise NinjaError {
+  // A parent load is already being measured.
+  let metric = metric_record(".ninja parse", when=parent is None)
+  defer metric.stop()
   let contents = match self.read {
     Some(read) =>
       read(filename) catch {

@@ -278,6 +278,8 @@ pub fn[D : Disk] DepsLog::load(
   path : String,
   state : State,
 ) -> (LoadStatus, String) raise NinjaError {
+  let metric = metric_record(".ninja_deps load")
+  defer metric.stop()
   guard disk.read_bytes(path) is Some(data) else { return (NotFound, "") }
   let len = data.length()
   let signature_size = deps_signature.length()
@@ -404,6 +406,8 @@ pub fn[D : Disk] DepsLog::recompact(
   disk : D,
   path : String,
 ) -> Unit raise NinjaError {
+  let metric = metric_record(".ninja_deps recompact")
+  defer metric.stop()
   self.close(disk)
   let temp = path + ".recompact"
   // Do not append to a file left over by a crashed recompaction.

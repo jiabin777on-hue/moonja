@@ -91,6 +91,8 @@ fn ImplicitDepLoader::load_depfile(
   edge : Edge,
   path : String,
 ) -> Bool raise NinjaError {
+  let metric = metric_record("depfile load")
+  defer metric.stop()
   // A missing depfile reads as empty.
   let content = self.disk.read_file(path) catch {
     error => raise Error("loading '\{path}': \{error.message()}")
