@@ -1,0 +1,14 @@
+# A first build: parse, both logs, stats, depfile, CL output, dyndep.
+run -j1 -d stats
+# Nothing to do: no StartEdge or FinishCommand.
+run -j1 -d stats
+touch a.h
+run -j1 -d stats
+write sub.in changed
+run -n -d stats
+# A failing build still prints metrics; so does an unknown target.
+run -j1 -d stats broken
+run -d stats nosuchtarget
+# Tools exit before the report.
+run -d stats -t targets
+run -d stats -d stats

@@ -1,0 +1,30 @@
+# Every code path ninja measures for -d stats.
+builddir = out
+rule cc
+  command = node t.js cc $out $out.d $in $headers
+  depfile = $out.d
+  deps = gcc
+rule ccmake
+  command = node t.js cc $out $out.d $in $headers
+  depfile = $out.d
+rule cl
+  command = node t.js msvc $out $in a.h
+  deps = msvc
+rule dd
+  command = node t.js dyndep $out out/all.txt a.h
+rule cat
+  command = node t.js cat $out $in
+rule fail
+  command = node t.js fail 1 broken
+subninja sub.ninja
+build out/main.o: cc main.c
+  headers = a.h
+build out/other.o: ccmake main.c
+  headers = a.h
+build out/cl.o: cl main.c
+build out/all.dd: dd
+build out/all.txt: cat out/main.o out/other.o out/cl.o out/sub.txt || out/all.dd
+  dyndep = out/all.dd
+build everything: phony out/all.txt
+build broken: fail
+default everything

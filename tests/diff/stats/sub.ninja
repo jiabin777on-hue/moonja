@@ -1,0 +1,2 @@
+include rules.ninja
+build out/sub.txt: copy sub.in

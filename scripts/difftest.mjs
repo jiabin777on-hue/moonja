@@ -76,7 +76,12 @@ function normalize(text, cwd) {
     .replace(/1\.13\.2\.git\.kitware\.jobserver-pipe-1/g, "1.13.2")
     // -d explain prints mtimes, which differ between the two copies.
     .replace(/\((-?\d+) vs (-?\d+)\)/g, "(T vs T)")
-    .replace(/(mtime|stored mtime) (-?\d+)/g, "$1 T");
+    .replace(/(mtime|stored mtime) (-?\d+)/g, "$1 T")
+    // -d stats: names and counts are compared, timings are not.
+    .replace(/^([^\t\r\n]*\t\d+ *\t)(?:\d+\.\d|-nan) *\t\d+\.\d(\r?)$/gm, "$1T\tT$2")
+    .replace(/^path->node hash load \S+ \((\d+) entries \/ \S+ buckets\)/gm, (m, n) =>
+      // The bucket count is the C++ library's: moonja models MSVC's only.
+      process.platform === "win32" ? m : `path->node hash load L (${n} entries / B buckets)`);
 }
 
 // Outputs, files and logs are compared byte for byte: each byte is one

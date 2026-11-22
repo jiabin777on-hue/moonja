@@ -65,7 +65,7 @@ $ node _build/js/release/build/cmd/cmd.js -C path/to/project
 - 全部步骤结束后的整个文件树内容；
 - `.ninja_log` 中每条记录的输出路径和命令哈希。
 
-目前有 18 个用例：基本构建与增量、失败与 `-k`、depfile/deps 日志、restat、清单自重建、phony/order-only/validation、rspfile、dyndep、作用域与转义、25 种错误信息、pool 与 console、`-C`、全部子工具在构建前后的输出，以及非 UTF-8 路径（`nonutf8` 只在 POSIX 上运行，`nonutf8-win` 只在 Windows 上运行）。每个平台运行 17 个用例。所有输出、文件名、文件内容和日志都按字节比较。CI 在 Linux（ubuntu-latest）和 Windows（windows-latest）上，以 `pip install ninja==1.13.2` 作为参照运行全部用例，两个平台都逐字节一致。
+目前有 19 个用例：基本构建与增量、失败与 `-k`、depfile/deps 日志、restat、清单自重建、phony/order-only/validation、rspfile、dyndep、作用域与转义、25 种错误信息、pool 与 console、`-C`、全部子工具在构建前后的输出、`-d stats`，以及非 UTF-8 路径（`nonutf8` 只在 POSIX 上运行，`nonutf8-win` 只在 Windows 上运行）。每个平台运行 18 个用例。所有输出、文件名、文件内容和日志都按字节比较。CI 在 Linux（ubuntu-latest）和 Windows（windows-latest）上，以 `pip install ninja==1.13.2` 作为参照运行全部用例，两个平台都逐字节一致。
 
 ```console
 $ moon build --target js
@@ -160,15 +160,21 @@ ninja 把路径、命令和日志都当作字节串处理，从不解码。比�
 
 目前仍按 UTF-8 解码的地方：环境变量，以及 Node 返回的当前工作目录。另外 Node 的 `process.chdir` 只接受字符串，所以 `-C` 无法进入名字含非 UTF-8 字节的目录。
 
+## `-d stats`
+
+`metrics.mbt` 移植了 ninja 的 `Metrics`：ninja 源码里的 12 个 `METRIC_RECORD` 在 moonja 的对应函数里都有，名字相同，按第一次执行的顺序列出，计数规则相同（例如 `subninja`/`include` 不另计 `.ninja parse`，dyndep 文件计入；phony 边计入 `StartEdge`，不计入 `FinishCommand`）。报告在 `RunBuild` 之后打印，构建失败或目标不存在时也打印，子工具不打印。`tests/diff/stats` 与真实 ninja 逐字节比较指标名、次数和路径表条目数；两边各自的耗时不同，比较前替换掉。
+
+最后一行 `path->node hash load` 的桶数来自 C++ 标准库的 `unordered_map`。Windows 上的 ninja 用 MSVC STL 构建，moonja 按它的扩容规则（8 个桶起，负载超过 1 时不足 512 乘 8，否则取下一个 2 的幂）算出相同的桶数；其他平台的 libstdc++/libc++ 按质数表扩容，moonja 不模拟，桶数和负载打印为 `?`。
+
 ## 路线图
 
-- `-d stats` 输出统计信息。
 - POSIX 上的 GNU make jobserver 客户端（`--jobserver-auth=fifo:`）。
 
 ## 与 ninja 的已知差异
 
 - `-t browse` 和 `-t msvc` 不支持（前者需要 Python，后者是已弃用的 Windows 辅助工具）。
-- `-d stats` 可以接受，但还不输出统计信息；GNU make jobserver 客户端还没有实现。这两项在路线图里（见下文）。
+- GNU make jobserver 客户端还没有实现（见路线图）。
+- `-d stats` 在 Windows 以外的平台不输出路径表的桶数和负载（见上文）。
 - `-t cleandead -v` 的删除顺序，以及 "did you mean" 在多个候选距离相同时选哪一个：ninja 这两处取决于哈希表的遍历顺序，moonja 按插入顺序。
 
 ## 许可证与来源

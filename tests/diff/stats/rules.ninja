@@ -1,0 +1,2 @@
+rule copy
+  command = node t.js cp $in $out
