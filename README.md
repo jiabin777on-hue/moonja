@@ -177,19 +177,20 @@ CI 的 `real-projects` 任务用同样的方式构建另外三个项目，每个
 
 | 场景 | Linux：ninja 1.13.2 | Linux：moonja | 倍数 | Windows：ninja 1.13.2 | Windows：moonja | 倍数 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 只解析清单（`-t targets all`） | 46 ms | 230 ms | 5.1x | 42 ms | 213 ms | 5.0x |
-| 全部最新的空构建 | 80 ms | 474 ms | 5.9x | 114 ms | 679 ms | 5.9x |
-| 从零开始的空跑（`-n`） | 193 ms | 852 ms | 4.4x | 1207 ms | 2197 ms | 1.8x |
+| 只解析清单（`-t targets all`） | 47 ms | 229 ms | 4.9x | 42 ms | 213 ms | 5.0x |
+| 全部最新的空构建 | 81 ms | 458 ms | 5.6x | 114 ms | 679 ms | 5.9x |
+| 从零开始的空跑（`-n`） | 179 ms | 774 ms | 4.3x | 1207 ms | 2197 ms | 1.8x |
 
 测试环境：
 - Linux：CI 的 `bench` 任务（ubuntu-latest，4 核 AMD EPYC 7763，Node 22），每次推送都会重跑，结果在该任务的 summary 中。GitHub 分配的机器型号不固定，数字随机器变化：另一次运行分到 Xeon 6975P-C，结果是 parse 27 对 166 ms（6.1x）、noop 54 对 339 ms（6.3x）、dryrun 89 对 474 ms（5.4x），倍数在 4–6 倍之间。
-- Windows：本机 Windows 11，i7-10750H，Node 25。
+- Windows：本机 Windows 11，i7-10750H，Node 25，测于 0.1.0，未包含之后的优化。
 
 如何解读这些数字：
 - Node 启动本身就要约 80 ms。解析清单这一项的大部分差距是 JS 后端本身的开销，两个平台上的倍数几乎相同。
 - Windows 上的空构建中约 250 ms 花在逐个文件的 `stat` 上。ninja 在 Windows 上用 `FindFirstFileEx` 按目录批量取 mtime，Node 没有对应的接口，单次 stat 约 11 µs。
 - 空跑在 Windows 上的倍数小，是因为 ninja 自己在这一项上就比 Linux 慢 6 倍（1207 ms 对 193 ms），原因未做剖析。以 Linux 的 4.4x 作为参考更合适。
-- 剖析中发现并修掉了两处热点：rapidhash 在 JS 后端逐字节拼 64 位整数（每个字要做 16 次 BigInt 运算），以及每行输出一次系统调用。
+- 剖析中发现并修掉的热点：每行输出一次系统调用；JS 后端的 `UInt64` 是 BigInt，于是 rapidhash 的 128 位乘法和 `.ninja_log` 的逐位数字解析都很慢，现在 rapidhash 用两个 32 位数表示 64 位值、16 位分段相乘，数字解析每 8 位才做一次 64 位运算（各有白盒测试与原实现逐一对照）；已是规范形式的路径不再复制。合计让 Linux 上的空构建从 474 ms 降到 458 ms，空跑从 852 ms 降到 774 ms（同型号 CI 机器）。
+- 现在剖析结果中剩下的大头是逐文件 `stat` 和 GC，没有单个突出的热点。
 
 ## 架构
 

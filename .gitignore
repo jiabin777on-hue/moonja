@@ -5,3 +5,6 @@ pkg.generated.mbti
 
 # Hackathon application drafts (personal details)
 moonja-*.md
+
+# Profiles from node --cpu-prof (moon publish packs untracked files)
+*.cpuprofile
