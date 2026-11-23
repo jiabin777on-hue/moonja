@@ -9,7 +9,8 @@ rule loud
 build a1: slow p.in
 build a2: slow p.in
 build a3: slow p.in
-# After a3, so that the console edge does not race the pool for the
-# progress numbers.
-build talk: loud || a3
+# After the whole pool, so that the console edge does not race it for the
+# progress numbers. (`|| a3` alone is not enough: ninja runs a3 first, since
+# talk puts it on the critical path, and talk then runs beside a1 and a2.)
+build talk: loud || a1 a2 a3
 build all: phony a1 a2 a3 talk
