@@ -1,6 +1,6 @@
 name = "jiabin777on-hue/moonja"
 
-version = "0.3.0"
+version = "0.4.0"
 
 description = "A Ninja-compatible build tool in MoonBit, verified against ninja 1.13.2"
 
