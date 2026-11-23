@@ -19,6 +19,55 @@ $ node _build/js/release/build/cmd/cmd.js -C path/to/project
 
 需要 Node.js 22.3 或更新版本。核心库不依赖任何 I/O，在 js、wasm-gc、native 三个后端上都通过全部测试。
 
+## 快速上手
+
+### 1. 构建并装成 `moonja` 命令
+
+```console
+$ git clone https://github.com/jiabin777on-hue/moonja
+$ cd moonja
+$ moon build --target js --release
+```
+
+构建结果是 `_build/js/release/build/cmd/cmd.js`。给它包一层脚本，放进 `PATH`：
+
+```sh
+# Linux / macOS
+mkdir -p ~/.local/bin
+printf '#!/bin/sh\nexec node %s "$@"\n' "$PWD/_build/js/release/build/cmd/cmd.js" > ~/.local/bin/moonja
+chmod +x ~/.local/bin/moonja
+```
+
+```powershell
+# Windows（PowerShell），把 moonja.cmd 放到 PATH 中的任一目录
+"@node `"$PWD\_build\js\release\build\cmd\cmd.js`" %*" | Out-File -Encoding ascii moonja.cmd
+```
+
+`moonja --version` 输出 `1.13.2`（与所兼容的 ninja 版本相同，构建脚本按这个值判断功能）。
+
+### 2. 用法和 ninja 一样
+
+```console
+$ moonja -C build            # 构建默认目标
+$ moonja -C build -j 8 app   # 8 路并行，只构建 app
+$ moonja -C build -t clean   # 子工具
+```
+
+### 3. 配合 CMake
+
+让 CMake 的 Ninja 生成器调用 moonja：
+
+```console
+$ cmake -S . -B build -G Ninja -DCMAKE_MAKE_PROGRAM="$(command -v moonja)"
+$ cmake --build build
+```
+
+CI 就是这样用 moonja 编译 ninja 自己的源码的（见下文“构建真实项目”）。moonja 和 ninja 写的 `.ninja_log`、`.ninja_deps` 格式相同，同一个构建目录可以两者交替使用，不会触发多余的重编。
+
+### 4. 在 GNU make 下运行
+
+POSIX 上，如果父进程 make 通过 `MAKEFLAGS` 提供了 FIFO jobserver（`make -j8` 且 make ≥ 4.4），moonja 会自动按令牌池限制并发，不需要额外参数；显式给出 `-j` 时以 `-j` 为准。
+
 ## 支持什么
 
 - **清单语言**：变量与作用域、`rule`/`build`/`pool`/`default`、`include`/`subninja`、`$` 转义、`ninja_required_version`、phony、隐式与 order-only 依赖、隐式输出、validation（`|@`）。
@@ -73,7 +122,7 @@ $ moon build --target js
 $ node scripts/difftest.mjs --ninja "$(which ninja)"
 ok   basic (7 runs)
 ...
-17/17 cases identical, 168 runs compared
+21/21 cases identical, 202 runs compared
 ```
 
 差分测试找到并修复了不少单元测试没有覆盖到的问题，例如：
@@ -110,15 +159,20 @@ CI 用 CMake 的 Ninja 生成器（`-DCMAKE_MAKE_PROGRAM=moonja`）配置 ninja 
 
 `scripts/bench.mjs` 仿照 ninja 的 `misc/write_fake_manifests.py` 生成工程：1 万个带 gcc deps 的目标文件，分布在 200 个目录中，再链接成库和可执行文件，共 10201 条边，清单 1 MiB。先用 ninja 完整构建一次，再分别计时，每项取 5 次的中位数：
 
-| 场景 | ninja 1.13.2 | moonja（Node 25） | 倍数 |
-| --- | ---: | ---: | ---: |
-| 只解析清单（`-t targets all`） | 42 ms | 213 ms | 5.0x |
-| 全部最新的空构建 | 114 ms | 679 ms | 5.9x |
-| 从零开始的空跑（`-n`） | 1207 ms | 2197 ms | 1.8x |
+| 场景 | Linux：ninja 1.13.2 | Linux：moonja | 倍数 | Windows：ninja 1.13.2 | Windows：moonja | 倍数 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 只解析清单（`-t targets all`） | 46 ms | 230 ms | 5.1x | 42 ms | 213 ms | 5.0x |
+| 全部最新的空构建 | 80 ms | 474 ms | 5.9x | 114 ms | 679 ms | 5.9x |
+| 从零开始的空跑（`-n`） | 193 ms | 852 ms | 4.4x | 1207 ms | 2197 ms | 1.8x |
 
-测试环境：Windows 11，i7-10750H。如何解读这些数字：
-- Node 启动本身就要约 80 ms。
-- 空构建中约 250 ms 花在逐个文件的 `stat` 上。ninja 在 Windows 上用 `FindFirstFileEx` 按目录批量取 mtime，Node 没有对应的接口，单次 stat 约 11 µs。Linux 上 stat 便宜得多，差距会小很多。
+测试环境：
+- Linux：CI 的 `bench` 任务（ubuntu-latest，4 核 AMD EPYC 7763，Node 22），每次推送都会重跑，结果在该任务的 summary 中。
+- Windows：本机 Windows 11，i7-10750H，Node 25。
+
+如何解读这些数字：
+- Node 启动本身就要约 80 ms。解析清单这一项的大部分差距是 JS 后端本身的开销，两个平台上的倍数几乎相同。
+- Windows 上的空构建中约 250 ms 花在逐个文件的 `stat` 上。ninja 在 Windows 上用 `FindFirstFileEx` 按目录批量取 mtime，Node 没有对应的接口，单次 stat 约 11 µs。
+- 空跑在 Windows 上的倍数小，是因为 ninja 自己在这一项上就比 Linux 慢 6 倍（1207 ms 对 193 ms），原因未做剖析。以 Linux 的 4.4x 作为参考更合适。
 - 剖析中发现并修掉了两处热点：rapidhash 在 JS 后端逐字节拼 64 位整数（每个字要做 16 次 BigInt 运算），以及每行输出一次系统调用。
 
 ## 架构
