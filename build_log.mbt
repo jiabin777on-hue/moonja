@@ -227,7 +227,15 @@ fn parse_c_integer(
     (text.unsafe_get(i + 1) == 'x' || text.unsafe_get(i + 1) == 'X') {
     i += 2
   }
+  // Digits are gathered in an Int, a chunk at a time, and only each chunk
+  // goes through UInt64 arithmetic: that is a BigInt on the JS backend,
+  // where one multiply per digit was a visible part of loading the log.
+  // The result is the same modulo 2^64.
+  let chunk_digits = if base == 16 { 7 } else { 8 }
   let mut value : UInt64 = 0
+  let mut chunk = 0
+  let mut scale = 1
+  let mut n = 0
   while i < end {
     let c = text.unsafe_get(i).to_int()
     let digit = if c >= '0'.to_int() && c <= '9'.to_int() {
@@ -239,8 +247,19 @@ fn parse_c_integer(
     } else {
       break
     }
-    value = value * base.to_uint64() + digit.to_uint64()
+    chunk = chunk * base + digit
+    scale = scale * base
+    n += 1
+    if n == chunk_digits {
+      value = value * scale.to_uint64() + chunk.to_uint64()
+      chunk = 0
+      scale = 1
+      n = 0
+    }
     i += 1
+  }
+  if n > 0 {
+    value = value * scale.to_uint64() + chunk.to_uint64()
   }
   if negative {
     0UL - value
