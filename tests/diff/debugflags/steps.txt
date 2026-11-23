@@ -1,0 +1,15 @@
+run -d list
+run -w list
+run -d list -d explain
+# With deps = gcc the depfile is deleted once read, unless keepdepfile.
+run -j1 x.o
+run -j1 -d keepdepfile y.o
+# nostatcache: the same answers, without the directory cache.
+run -j1 -d nostatcache all
+touch h.h
+run -j1 -d nostatcache -d explain all
+run -j1 -d nostatcache all
+# Flags combine; keeprsp keeps the response file of this run only.
+touch y.c
+run -j1 -d keepdepfile -d keeprsp all
+run -j1 all

@@ -115,14 +115,14 @@ POSIX 上，如果父进程 make 通过 `MAKEFLAGS` 提供了 FIFO jobserver（`
 - 全部步骤结束后的整个文件树内容；
 - `.ninja_log` 中每条记录的输出路径和命令哈希。
 
-目前有 23 个用例：基本构建与增量、失败与 `-k`、depfile/deps 日志、restat、清单自重建、phony/order-only/validation、rspfile、dyndep、作用域与转义、25 种错误信息、pool 与 console、`-C`、全部子工具在构建前后的输出、`-d stats`、由 ninja 内部哈希表决定的顺序（`did you mean` 打平时的选择、日志压缩后 `-t cleandead` 的删除顺序）、`MAKEFLAGS` 中各种 jobserver 设置的提示与报错（`jobserver-posix` 只在 POSIX 上运行），非 UTF-8 路径（`nonutf8` 只在 POSIX 上运行，`nonutf8-win` 只在 Windows 上运行），以及用 SIGINT、SIGTERM、SIGHUP 中断构建（`interrupt`，只在 POSIX 上运行，见下）。Linux 运行其中 22 个，Windows 运行 20 个。所有输出、文件名、文件内容和日志都按字节比较。CI 在 Linux（ubuntu-latest）和 Windows（windows-latest）上，以 `pip install ninja==1.13.2` 作为参照运行全部用例，两个平台都逐字节一致。pip 上的 ninja 是 Kitware 的分支（版本号带 `jobserver-pipe-1` 后缀），它额外支持 pipe 模式的 jobserver（`--jobserver-auth=R,W`），而上游 1.13.2 只给出警告；所以差分用例不含 pipe 模式，上游的这一行为由下文的 `misc/jobserver_test.py` 检查。
+目前有 24 个用例：基本构建与增量、失败与 `-k`、depfile/deps 日志、restat、清单自重建、phony/order-only/validation、rspfile、dyndep、作用域与转义、25 种错误信息、pool 与 console、`-C`、全部子工具在构建前后的输出、`-d stats`、`-d keepdepfile`/`keeprsp`/`nostatcache`/`list` 与 `-w list`、由 ninja 内部哈希表决定的顺序（`did you mean` 打平时的选择、日志压缩后 `-t cleandead` 的删除顺序）、`MAKEFLAGS` 中各种 jobserver 设置的提示与报错（`jobserver-posix` 只在 POSIX 上运行），非 UTF-8 路径（`nonutf8` 只在 POSIX 上运行，`nonutf8-win` 只在 Windows 上运行），以及用 SIGINT、SIGTERM、SIGHUP 中断构建（`interrupt`，只在 POSIX 上运行，见下）。Linux 运行其中 23 个，Windows 运行 21 个。所有输出、文件名、文件内容和日志都按字节比较。CI 在 Linux（ubuntu-latest）和 Windows（windows-latest）上，以 `pip install ninja==1.13.2` 作为参照运行全部用例，两个平台都逐字节一致。pip 上的 ninja 是 Kitware 的分支（版本号带 `jobserver-pipe-1` 后缀），它额外支持 pipe 模式的 jobserver（`--jobserver-auth=R,W`），而上游 1.13.2 只给出警告；所以差分用例不含 pipe 模式，上游的这一行为由下文的 `misc/jobserver_test.py` 检查。
 
 ```console
 $ moon build --target js
 $ node scripts/difftest.mjs --ninja "$(which ninja)"
 ok   basic (7 runs)
 ...
-22/22 cases identical, 211 runs compared
+23/23 cases identical, 221 runs compared
 ```
 
 差分测试找到并修复了不少单元测试没有覆盖到的问题，例如：

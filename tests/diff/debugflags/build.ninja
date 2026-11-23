@@ -1,0 +1,14 @@
+# Debug and warning flags not covered elsewhere.
+rule cc
+  command = node t.js cc $out $out.d $in h.h
+  depfile = $out.d
+  deps = gcc
+rule rsp
+  command = node t.js rsp $out @$out.rsp
+  rspfile = $out.rsp
+  rspfile_content = $in
+build x.o: cc x.c
+build y.o: cc y.c
+build list.txt: rsp x.o y.o
+build all: phony list.txt
+default all
