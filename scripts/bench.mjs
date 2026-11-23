@@ -4,6 +4,8 @@
 // D directories, linked into libraries and a final binary.
 //
 //   node scripts/bench.mjs --ninja PATH [--moonja "node .../cmd.js"] [--objects N] [--runs R]
+//   node scripts/bench.mjs --generate DIR [--objects N]
+//                      only write the project into DIR (for profiling)
 //
 // Times (median of R runs, milliseconds):
 //   parse   -t targets all: load the manifest only
@@ -17,13 +19,14 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1")), "..");
-const opts = { ninja: process.env.NINJA || "ninja", moonja: null, objects: 5000, runs: 5 };
+const opts = { ninja: process.env.NINJA || "ninja", moonja: null, objects: 5000, runs: 5, generate: null };
 for (let i = 2; i < process.argv.length; i++) {
   const a = process.argv[i];
   if (a === "--ninja") opts.ninja = process.argv[++i];
   else if (a === "--moonja") opts.moonja = process.argv[++i];
   else if (a === "--objects") opts.objects = Number(process.argv[++i]);
   else if (a === "--runs") opts.runs = Number(process.argv[++i]);
+  else if (a === "--generate") opts.generate = process.argv[++i];
 }
 opts.moonja ??= `node ${path.join(root, "_build", "js", "release", "build", "cmd", "cmd.js")}`;
 
@@ -93,6 +96,11 @@ function run(tool, args, cwd) {
 function median(xs) {
   const s = [...xs].sort((a, b) => a - b);
   return s[Math.floor(s.length / 2)];
+}
+
+if (opts.generate !== null) {
+  generate(opts.generate, opts.objects);
+  process.exit(0);
 }
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "moonja-bench-"));
