@@ -172,3 +172,84 @@ jobs:
       - run: moon build --target js --release
       - name: Benchmark
         run: node scripts/bench.mjs --ninja "$(python -c 'import ninja, os; print(os.path.join(ninja.BIN_DIR, "ninja"))')" --objects 10000 --runs 5
+
+  # More real projects, each configured by its own generator with moonja as
+  # the build tool: build, run the project's tests, no-op rebuild, touching a
+  # header rebuilds only its users, and the real ninja accepts the result.
+  real-projects:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: fmt (CMake)
+            repo: https://github.com/fmtlib/fmt
+            tag: "12.2.1"
+            generator: cmake
+            header: include/fmt/format.h
+          - name: zlib (CMake)
+            repo: https://github.com/madler/zlib
+            tag: v1.4
+            generator: cmake
+            header: zlib.h
+          - name: inih (Meson)
+            repo: https://github.com/benhoyt/inih
+            tag: r63
+            generator: meson
+            header: ini.h
+    name: real-projects (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    env:
+      SRC: ${{ github.workspace }}/../project-src
+      OUT: ${{ github.workspace }}/../project-build
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - run: moon build --target js --release
+      - name: Install moonja as `moonja`, ninja 1.13.2 and meson
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          printf '#!/bin/sh\nexec %s %s "$@"\n' "$(command -v node)" "$GITHUB_WORKSPACE/_build/js/release/build/cmd/cmd.js" > "$RUNNER_TEMP/bin/moonja"
+          chmod +x "$RUNNER_TEMP/bin/moonja"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          python -m pip install ninja==1.13.2 meson
+      - name: Fetch ${{ matrix.name }}
+        run: git clone --depth 1 --branch "${{ matrix.tag }}" "${{ matrix.repo }}" "$SRC"
+      - name: Configure (CMake)
+        if: matrix.generator == 'cmake'
+        run: cmake -S "$SRC" -B "$OUT" -G Ninja -DCMAKE_MAKE_PROGRAM="$RUNNER_TEMP/bin/moonja" -DCMAKE_BUILD_TYPE=Release
+      - name: Configure (Meson)
+        if: matrix.generator == 'meson'
+        # meson finds the build tool through $NINJA.
+        run: NINJA=moonja meson setup "$OUT" "$SRC" -Dtests=true
+      - name: Build
+        run: time moonja -C "$OUT"
+      - name: The project's tests pass (CMake)
+        if: matrix.generator == 'cmake'
+        run: ctest --test-dir "$OUT" --output-on-failure --no-tests=error
+      - name: The project's tests pass (Meson)
+        if: matrix.generator == 'meson'
+        run: NINJA=moonja meson test -C "$OUT" --print-errorlogs
+      - name: A second build does nothing
+        run: moonja -C "$OUT" | tee out.txt && grep -q "no work to do" out.txt
+      - name: Touching a header rebuilds its users only
+        run: |
+          touch "$SRC/${{ matrix.header }}"
+          moonja -C "$OUT" | tee out.txt
+          ! grep -q "no work to do" out.txt
+          moonja -C "$OUT" | grep -q "no work to do"
+      - name: ninja and moonja share the build directory
+        run: |
+          ninja -C "$OUT" | tee out.txt && grep -q "no work to do" out.txt
+          touch "$SRC/${{ matrix.header }}"
+          ninja -C "$OUT" | tee out.txt
+          ! grep -q "no work to do" out.txt
+          moonja -C "$OUT" | grep -q "no work to do"
