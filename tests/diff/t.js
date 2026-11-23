@@ -17,6 +17,11 @@
 //   node t.js dyndep DD OUT INPUT...
 //                                 write a dyndep file making OUT depend on
 //                                 the INPUTs
+//   node t.js hang MARKER [OUT TEXT...]
+//                                 if hang.flag exists: write TEXT to OUT
+//                                 (when given), write this pid to MARKER
+//                                 and wait to be killed; otherwise write
+//                                 TEXT to OUT and exit
 const fs = require("node:fs");
 const [op, ...args] = process.argv.slice(2);
 const read = (f) => fs.readFileSync(f, "utf8");
@@ -74,6 +79,17 @@ switch (op) {
     // Writes every output named after "--".
     const outs = args.slice(args.indexOf("--") + 1);
     for (const o of outs) fs.writeFileSync(o, args.slice(0, args.indexOf("--")).join(" ") + "\n");
+    break;
+  }
+  case "hang": {
+    const [marker, out, ...text] = args;
+    if (out !== undefined) fs.writeFileSync(out, text.join(" ") + "\n");
+    if (fs.existsSync("hang.flag")) {
+      process.stdout.write("hanging\n");
+      fs.writeFileSync(marker, `${process.pid}\n`);
+      // Bounded, so a command the tool fails to kill cannot outlive the test.
+      setTimeout(() => {}, 20000);
+    }
     break;
   }
   default:

@@ -1,0 +1,16 @@
+rule cp
+  command = node t.js cp $in $out
+# Writes its depfile and a new OUT, then hangs (when hang.flag exists).
+rule hangd
+  command = node t.js write $out.d $out: $in && node t.js hang $out.pid $out partial
+  depfile = $out.d
+# Leaves OUT alone, then hangs.
+rule hangkeep
+  command = node t.js hang $out.pid && node t.js cp $in $out
+  rspfile = $out.rsp
+  rspfile_content = $in
+build a: cp in.txt
+build b: hangd a
+build c: hangkeep in2.txt
+build all: phony b c
+default all

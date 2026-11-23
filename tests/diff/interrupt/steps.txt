@@ -1,0 +1,26 @@
+# Ninja's Builder::Cleanup on an interrupt: an interrupted edge with a
+# depfile loses its outputs and depfile, one without keeps outputs it did
+# not modify; finished edges stay in the log; the commands are killed.
+run -j1 all
+run -j1 all
+write hang.flag yes
+touch in.txt
+touch in2.txt
+interrupt SIGINT b.pid,c.pid -j3 all
+rm hang.flag
+rm b.pid
+rm c.pid
+run -j1 all
+run -j1 all
+write hang.flag yes
+touch in2.txt
+touch a
+interrupt SIGTERM b.pid,c.pid -j2 all
+rm b.pid
+rm c.pid
+interrupt SIGHUP b.pid,c.pid -j2 all
+rm hang.flag
+rm b.pid
+rm c.pid
+run -j1 -d explain all
+run -j1 all

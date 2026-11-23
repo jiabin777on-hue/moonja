@@ -15,6 +15,10 @@
 //   sleep MS           pause
 //   env NAME VALUE...  set an environment variable for the next runs
 //                      (`env NAME` unsets it); MAKEFLAGS starts unset
+//   interrupt SIGNAL MARKER[,MARKER...] ARGS...
+//                      run the build tool, and send it SIGNAL once every
+//                      MARKER file exists (see scripts/interrupt.mjs;
+//                      POSIX only)
 //   # comment
 //
 // Arguments and file names may spell bytes as \xHH (POSIX only), and a
@@ -207,10 +211,18 @@ function runCase(name, opts) {
     if (line === "" || line.startsWith("#")) continue;
     const [op, ...rest] = splitWords(line);
     const where = `step ${index + 1} (${line})`;
-    if (op === "run") {
+    if (op === "run" || op === "interrupt") {
       runs++;
       const results = {};
-      for (const who of ["ninja", "moonja"]) results[who] = run(tools[who], rest, dirs[who], caseEnv);
+      for (const who of ["ninja", "moonja"]) {
+        if (op === "run") {
+          results[who] = run(tools[who], rest, dirs[who], caseEnv);
+        } else {
+          const [signal, markers, ...args] = rest;
+          const helper = `node ${path.join(root, "scripts", "interrupt.mjs")} ${signal} ${markers} ${tools[who]}`;
+          results[who] = run(helper, args, dirs[who], caseEnv);
+        }
+      }
       const a = results.ninja;
       const b = results.moonja;
       for (const d of [diffText("stdout", a.out, b.out), diffText("stderr", a.err, b.err)]) {
