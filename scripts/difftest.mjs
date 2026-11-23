@@ -221,6 +221,11 @@ function runCase(name, opts) {
           const [signal, markers, ...args] = rest;
           const helper = `node ${path.join(root, "scripts", "interrupt.mjs")} ${signal} ${markers} ${tools[who]}`;
           results[who] = run(helper, args, dirs[who], caseEnv);
+          // Commands that never started, or were left running, would look
+          // the same for both tools: never let that pass.
+          for (const line of results[who].err.split("\n")) {
+            if (line.startsWith("interrupt.mjs:")) problems.push(`${where}\n  ${who}: ${line}`);
+          }
         }
       }
       const a = results.ninja;

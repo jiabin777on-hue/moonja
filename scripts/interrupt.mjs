@@ -21,7 +21,9 @@ const err = [];
 child.stdout.on("data", (b) => out.push(b));
 child.stderr.on("data", (b) => err.push(b));
 
-const deadline = Date.now() + 30000;
+// Shorter than the 20 s a `t.js hang` command waits, so a marker that never
+// appears is reported here instead of the build quietly finishing.
+const deadline = Date.now() + 10000;
 const poll = setInterval(() => {
   if (markers.every((m) => fs.existsSync(m) && fs.readFileSync(m, "utf8").trim() !== "")) {
     clearInterval(poll);
