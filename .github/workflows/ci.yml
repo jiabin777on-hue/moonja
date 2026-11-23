@@ -150,3 +150,25 @@ jobs:
           ninja -C "$RUNNER_TEMP/build" | tee out.txt
           ! grep -q "no work to do" out.txt
           moonja -C "$RUNNER_TEMP/build" | grep -q "no work to do"
+
+  # moonja vs ninja on a generated 10k-object project (scripts/bench.mjs).
+  # The numbers appear in the job summary and as notice annotations.
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install ninja 1.13.2 (the reference)
+        run: python -m pip install ninja==1.13.2
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - run: moon build --target js --release
+      - name: Benchmark
+        run: node scripts/bench.mjs --ninja "$(python -c 'import ninja, os; print(os.path.join(ninja.BIN_DIR, "ninja"))')" --objects 10000 --runs 5

@@ -143,4 +143,25 @@ for (const r of rows) {
     `${r.name.padEnd(9)}  ${r.ninja.toFixed(0).padStart(10)}   ${r.moonja.toFixed(0).padStart(11)}   ${(r.moonja / r.ninja).toFixed(1).padStart(5)}x`,
   );
 }
+// On GitHub Actions, also report the numbers as a job summary table and as
+// notice annotations (readable without signing in, unlike the job log).
+if (process.env.GITHUB_ACTIONS) {
+  const env = `${os.platform()}, Node ${process.version}, ${os.cpus().length} x ${os.cpus()[0].model}`;
+  for (const r of rows) {
+    console.log(
+      `::notice title=bench ${r.name}::ninja ${r.ninja.toFixed(0)} ms, moonja ${r.moonja.toFixed(0)} ms, ${(r.moonja / r.ninja).toFixed(1)}x (${edges} edges; ${env})`,
+    );
+  }
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    const table = [
+      `${edges} edges, build.ninja ${manifestKiB} KiB, median of ${opts.runs} runs; ${env}`,
+      "",
+      "| scenario | ninja (ms) | moonja (ms) | ratio |",
+      "| --- | ---: | ---: | ---: |",
+      ...rows.map((r) => `| ${r.name} | ${r.ninja.toFixed(0)} | ${r.moonja.toFixed(0)} | ${(r.moonja / r.ninja).toFixed(1)}x |`),
+      "",
+    ];
+    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, table.join("\n"));
+  }
+}
 fs.rmSync(work, { recursive: true, force: true });
