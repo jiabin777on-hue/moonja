@@ -115,14 +115,14 @@ POSIX 上，如果父进程 make 通过 `MAKEFLAGS` 提供了 FIFO jobserver（`
 - 全部步骤结束后的整个文件树内容；
 - `.ninja_log` 中每条记录的输出路径和命令哈希。
 
-目前有 22 个用例：基本构建与增量、失败与 `-k`、depfile/deps 日志、restat、清单自重建、phony/order-only/validation、rspfile、dyndep、作用域与转义、25 种错误信息、pool 与 console、`-C`、全部子工具在构建前后的输出、`-d stats`、由 ninja 内部哈希表决定的顺序（`did you mean` 打平时的选择、日志压缩后 `-t cleandead` 的删除顺序）、`MAKEFLAGS` 中各种 jobserver 设置的提示与报错（`jobserver-posix` 只在 POSIX 上运行），以及非 UTF-8 路径（`nonutf8` 只在 POSIX 上运行，`nonutf8-win` 只在 Windows 上运行）。Linux 运行其中 21 个，Windows 运行 20 个。所有输出、文件名、文件内容和日志都按字节比较。CI 在 Linux（ubuntu-latest）和 Windows（windows-latest）上，以 `pip install ninja==1.13.2` 作为参照运行全部用例，两个平台都逐字节一致。pip 上的 ninja 是 Kitware 的分支（版本号带 `jobserver-pipe-1` 后缀），它额外支持 pipe 模式的 jobserver（`--jobserver-auth=R,W`），而上游 1.13.2 只给出警告；所以差分用例不含 pipe 模式，上游的这一行为由下文的 `misc/jobserver_test.py` 检查。
+目前有 23 个用例：基本构建与增量、失败与 `-k`、depfile/deps 日志、restat、清单自重建、phony/order-only/validation、rspfile、dyndep、作用域与转义、25 种错误信息、pool 与 console、`-C`、全部子工具在构建前后的输出、`-d stats`、由 ninja 内部哈希表决定的顺序（`did you mean` 打平时的选择、日志压缩后 `-t cleandead` 的删除顺序）、`MAKEFLAGS` 中各种 jobserver 设置的提示与报错（`jobserver-posix` 只在 POSIX 上运行），非 UTF-8 路径（`nonutf8` 只在 POSIX 上运行，`nonutf8-win` 只在 Windows 上运行），以及用 SIGINT、SIGTERM、SIGHUP 中断构建（`interrupt`，只在 POSIX 上运行，见下）。Linux 运行其中 22 个，Windows 运行 20 个。所有输出、文件名、文件内容和日志都按字节比较。CI 在 Linux（ubuntu-latest）和 Windows（windows-latest）上，以 `pip install ninja==1.13.2` 作为参照运行全部用例，两个平台都逐字节一致。pip 上的 ninja 是 Kitware 的分支（版本号带 `jobserver-pipe-1` 后缀），它额外支持 pipe 模式的 jobserver（`--jobserver-auth=R,W`），而上游 1.13.2 只给出警告；所以差分用例不含 pipe 模式，上游的这一行为由下文的 `misc/jobserver_test.py` 检查。
 
 ```console
 $ moon build --target js
 $ node scripts/difftest.mjs --ninja "$(which ninja)"
 ok   basic (7 runs)
 ...
-21/21 cases identical, 202 runs compared
+22/22 cases identical, 211 runs compared
 ```
 
 差分测试找到并修复了不少单元测试没有覆盖到的问题，例如：
@@ -155,6 +155,22 @@ CI 用 CMake 的 Ninja 生成器（`-DCMAKE_MAKE_PROGRAM=moonja`）配置 ninja 
 - 修改头文件后只重编依赖它的目标（依赖来自 `deps = gcc` 写入的 `.ninja_deps`）；
 - 修改 `CMakeLists.txt` 后，moonja 会通过 generator 边重新运行 CMake、重新加载清单并继续构建。
 
+### 5. 更多真实项目
+
+CI 的 `real-projects` 任务用同样的方式构建另外三个项目，每个项目由各自的生成器配置、由 moonja 构建：
+
+| 项目 | 版本 | 生成器 | 测试 |
+| --- | --- | --- | --- |
+| [fmt](https://github.com/fmtlib/fmt) | 12.2.1 | CMake | `ctest` |
+| [zlib](https://github.com/madler/zlib) | v1.4 | CMake | `ctest` |
+| [inih](https://github.com/benhoyt/inih) | r63 | Meson（`NINJA=moonja`） | `meson test` |
+
+每个项目都要通过：构建、项目自己的测试、第二次构建 `no work to do.`、修改一个头文件后只重编依赖它的目标，以及换成真实 ninja 接着构建时不重编、ninja 改动后 moonja 也不重编。
+
+### 6. 中断
+
+差分测试的 `interrupt` 步骤（`scripts/interrupt.mjs`）先启动构建工具，等被测命令都开始运行（命令写出自己的 pid 作为标记），再向构建工具发信号。`tests/diff/interrupt` 依次用 SIGINT、SIGTERM、SIGHUP 中断有并行命令的构建，然后与 ninja 比较输出、退出码（130）和文件树。要求与 ninja 的 `Builder::Cleanup` 一致：被中断且带 depfile 的边，输出和 depfile 都要删除；没有 depfile 的边，没改动过的输出要保留；rspfile 保留；已完成的边留在 `.ninja_log` 里；下一次构建只重做被中断的边。被中断的命令必须被杀掉，构建工具退出后仍在运行的命令、始终没有启动的命令，都算测试失败。
+
 ## 性能
 
 `scripts/bench.mjs` 仿照 ninja 的 `misc/write_fake_manifests.py` 生成工程：1 万个带 gcc deps 的目标文件，分布在 200 个目录中，再链接成库和可执行文件，共 10201 条边，清单 1 MiB。先用 ninja 完整构建一次，再分别计时，每项取 5 次的中位数：
@@ -166,7 +182,7 @@ CI 用 CMake 的 Ninja 生成器（`-DCMAKE_MAKE_PROGRAM=moonja`）配置 ninja 
 | 从零开始的空跑（`-n`） | 193 ms | 852 ms | 4.4x | 1207 ms | 2197 ms | 1.8x |
 
 测试环境：
-- Linux：CI 的 `bench` 任务（ubuntu-latest，4 核 AMD EPYC 7763，Node 22），每次推送都会重跑，结果在该任务的 summary 中。
+- Linux：CI 的 `bench` 任务（ubuntu-latest，4 核 AMD EPYC 7763，Node 22），每次推送都会重跑，结果在该任务的 summary 中。GitHub 分配的机器型号不固定，数字随机器变化：另一次运行分到 Xeon 6975P-C，结果是 parse 27 对 166 ms（6.1x）、noop 54 对 339 ms（6.3x）、dryrun 89 对 474 ms（5.4x），倍数在 4–6 倍之间。
 - Windows：本机 Windows 11，i7-10750H，Node 25。
 
 如何解读这些数字：
