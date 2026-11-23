@@ -37,6 +37,48 @@ fn Platform::is_separator(self : Platform, c : UInt16) -> Bool {
 }
 
 ///|
+fn is_canonical(path : String, platform : Platform) -> Bool {
+  // True when canonicalize_path would return the path unchanged with no
+  // slash bits: no empty, `.` or `..` component, no trailing separator, and
+  // on Windows no backslash. Most manifest paths are like this, and
+  // skipping the copy is a large part of parsing time on the JS backend.
+  let len = path.length()
+  let windows = platform is Windows
+  // Start of the current component; a single root separator is allowed.
+  let mut start = if path.unsafe_get(0) == '/' { 1 } else { 0 }
+  if windows && path.unsafe_get(0) == '\\' {
+    return false
+  }
+  if start == len {
+    // "/" itself.
+    return true
+  }
+  for i in start..<len {
+    let c = path.unsafe_get(i)
+    if c == '/' || (windows && c == '\\') {
+      if c == '\\' {
+        return false
+      }
+      let n = i - start
+      if n == 0 ||
+        (n == 1 && path.unsafe_get(start) == '.') ||
+        (
+          n == 2 &&
+          path.unsafe_get(start) == '.' &&
+          path.unsafe_get(start + 1) == '.'
+        ) {
+        return false
+      }
+      start = i + 1
+    }
+  }
+  let n = len - start
+  !(n == 0 ||
+  (n == 1 && path.unsafe_get(start) == '.') ||
+  (n == 2 && path.unsafe_get(start) == '.' && path.unsafe_get(start + 1) == '.'))
+}
+
+///|
 /// Port of ninja's `CanonicalizePath`: removes `.` components, empty
 /// components and `..` where possible, without touching the file system.
 /// On Windows, backslashes become `/` and the returned bits record which
@@ -50,6 +92,19 @@ pub fn canonicalize_path(
   if len == 0 {
     return ("", 0)
   }
+  if is_canonical(path, platform) {
+    return (path, 0)
+  }
+  canonicalize_path_copy(path, platform)
+}
+
+///|
+/// canonicalize_path without the shortcut for paths already in canonical form.
+fn canonicalize_path_copy(
+  path : String,
+  platform : Platform,
+) -> (String, UInt64) {
+  let len = path.length()
   let buf : Array[UInt16] = Array::makei(len, fn(i) { path.unsafe_get(i) })
   let sep = fn(c : UInt16) { platform.is_separator(c) }
   let end = len
