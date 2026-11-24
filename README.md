@@ -157,13 +157,16 @@ CI 用 CMake 的 Ninja 生成器（`-DCMAKE_MAKE_PROGRAM=moonja`）配置 ninja 
 
 ### 5. 更多真实项目
 
-CI 的 `real-projects` 任务用同样的方式构建另外三个项目，每个项目由各自的生成器配置、由 moonja 构建：
+CI 的 `real-projects` 任务用同样的方式构建另外六个项目，每个项目由各自的生成器配置、由 moonja 构建：
 
 | 项目 | 版本 | 生成器 | 测试 |
 | --- | --- | --- | --- |
 | [fmt](https://github.com/fmtlib/fmt) | 12.2.1 | CMake | `ctest` |
 | [zlib](https://github.com/madler/zlib) | v1.4 | CMake | `ctest` |
 | [inih](https://github.com/benhoyt/inih) | r63 | Meson（`NINJA=moonja`） | `meson test` |
+| [json-c](https://github.com/json-c/json-c) | 0.19-20260627 | CMake | `ctest` |
+| [libpng](https://github.com/pnggroup/libpng) | v1.6.59 | CMake | `ctest` |
+| [fribidi](https://github.com/fribidi/fribidi) | v1.0.18 | Meson（`NINJA=moonja`） | `meson test` |
 
 每个项目都要通过：构建、项目自己的测试、第二次构建 `no work to do.`、修改一个头文件后只重编依赖它的目标，以及换成真实 ninja 接着构建时不重编、ninja 改动后 moonja 也不重编。
 
