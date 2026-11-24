@@ -196,6 +196,24 @@ jobs:
             tag: r63
             generator: meson
             header: ini.h
+            meson_args: -Dtests=true
+          - name: json-c (CMake)
+            repo: https://github.com/json-c/json-c
+            tag: json-c-0.19-20260627
+            generator: cmake
+            header: json_object.h
+          - name: libpng (CMake)
+            repo: https://github.com/pnggroup/libpng
+            tag: v1.6.59
+            generator: cmake
+            header: png.h
+          - name: fribidi (Meson)
+            repo: https://github.com/fribidi/fribidi
+            tag: v1.0.18
+            generator: meson
+            header: lib/fribidi.h
+            # docs need c2man, which the runner does not have.
+            meson_args: -Ddocs=false
     name: real-projects (${{ matrix.name }})
     runs-on: ubuntu-latest
     env:
@@ -229,7 +247,7 @@ jobs:
       - name: Configure (Meson)
         if: matrix.generator == 'meson'
         # meson finds the build tool through $NINJA.
-        run: NINJA=moonja meson setup "$OUT" "$SRC" -Dtests=true
+        run: NINJA=moonja meson setup "$OUT" "$SRC" ${{ matrix.meson_args }}
       - name: Build
         run: time moonja -C "$OUT"
       - name: The project's tests pass (CMake)
